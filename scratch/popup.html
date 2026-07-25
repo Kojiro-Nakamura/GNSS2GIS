@@ -1,0 +1,496 @@
+<!DOCTYPE html><html lang="ja"><head>
+<meta charset="UTF-8">
+<title>平面図レイアウト調整 - 令和8年度_育成複層林整備_山田太郎_No.10</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #525659; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .print-toolbar { background: #282828; color: white; padding: 10px 15px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 100; flex-shrink: 0; }
+  .print-toolbar select, .print-toolbar input { padding: 4px 6px; border-radius: 4px; border: none; font-size: 13px; color: #000; }
+  button { background: #355E8B; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold; }
+  button:hover { opacity: 0.9; }
+  button.btn-green { background: #217270; }
+  button.btn-purple { background: #725684; }
+  .print-workspace { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 40px; position: relative; }
+  .print-canvas-container { position: relative; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); flex-shrink: 0; overflow: hidden; margin-bottom: 40px; transform-origin: top center; transition: transform 0.15s ease-out; }
+  .print-canvas-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .print-draggable { position: absolute; cursor: move; transform-origin: top left; user-select: none; -webkit-user-select: none; }
+  .print-hover-outline { transition: outline 0.2s, outline-offset 0.2s; outline: 2px dashed transparent; outline-offset: 4px; }
+  .print-hover-outline { transition: outline 0.2s, outline-offset 0.2s; outline: 2px dashed transparent; outline-offset: 4px; }
+  .print-hover-outline:hover { outline-color: #3b82f6; outline-offset: 2px; }
+  .svg-draggable { cursor: move; }
+  .svg-draggable:hover { opacity: 0.6; }
+  .pl-table-title { background: #f0f0f0; padding: 3px 5px; font-weight: bold; font-size: 12px; border-bottom: 2px solid #333; text-align: center; color: #000; }
+  .pl-table { border-collapse: collapse; font-size: 12px; border-style: hidden; width: 100%; margin: 0; color: #000; background: #fff; }
+  .pl-table th, .pl-table td { border: 1px solid #333; padding: 2px 4px; white-space: nowrap; color: #000; text-align: center; font-weight: normal; }
+  .pl-table th { background: transparent; }
+  .pl-attr-table { width: 100%; margin: 0; border: none; border-collapse: collapse; font-size: 12px; color: #000; background: #fff; }
+  .pl-attr-table th, .pl-attr-table td { border: 1px solid #333; padding: 4px 6px; white-space: nowrap; color: #000; text-align: left; font-weight: normal; }
+  .pl-box { background: #fff; border: 2px solid #333; }
+  .map-cropper { outline: 1px dashed transparent; pointer-events: auto; }
+  .map-cropper:hover, .map-cropper.active { outline-color: #f59e0b; }
+  .resize-handle { position: absolute; width: 12px; height: 12px; background: #fff; border: 1px solid #333; display: none; z-index: 10; pointer-events: auto; }
+  .map-cropper:hover .resize-handle, .map-cropper.active .resize-handle { display: block; }
+  .resize-handle.n { top: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+  .resize-handle.s { bottom: -6px; left: calc(50% - 6px); cursor: ns-resize; }
+  .resize-handle.e { top: calc(50% - 6px); right: -6px; cursor: ew-resize; }
+  .resize-handle.w { top: calc(50% - 6px); left: -6px; cursor: ew-resize; }
+  .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+  .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+  .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+  .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+  .print-help-bar { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); color: white; text-align: center; padding: 6px; font-size: 13px; z-index: 100; pointer-events: none; }
+  @media print {
+      body { background: #fff; display: block; height: auto; overflow: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .print-toolbar, .print-help-bar { display: none !important; }
+      .print-workspace { padding: 0 !important; display: block; overflow: visible; }
+      .print-canvas-container { box-shadow: none !important; margin: 0 !important; page-break-after: avoid; page-break-inside: avoid; transform: none !important; }
+      .print-hover-outline { outline: none !important; }
+      .svg-draggable { cursor: default; opacity: 1 !important; }
+  }
+</style>
+<style id="dynamicStyle">@page { size: A4 landscape; margin: 0; }</style>
+</head>
+<body>
+    <div class="print-toolbar">
+        <div style="display:flex; align-items:center; gap:4px;">
+            <label style="font-size:13px;">📄 用紙:</label>
+            <select id="paperSize"><option value="A4" selected="">A4</option><option value="A3">A3</option><option value="A2">A2</option><option value="A1">A1</option><option value="A0">A0</option></select>
+            <select id="paperOrient"><option value="landscape" selected="">横</option><option value="portrait">縦</option></select>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left: 10px;">
+            <label style="font-size:13px;">🔍 縮尺: 1 /</label>
+            <input type="number" id="scale" value="1000" style="width: 70px;">
+            <button id="btnAutoScale" style="padding: 4px 8px; font-size: 11px;">自動調整</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left: 10px;">
+            <label style="font-size:13px;">📑 表折り返し:</label>
+            <select id="tableWrap"><option value="0">なし</option><option value="20">20行</option><option value="30">30行</option><option value="50" selected="">50行</option></select>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left: 10px;">
+            <label style="font-size:13px;">ファイル名:</label>
+            <input type="text" id="filename" value="令和8年度_育成複層林整備_山田太郎_No.10" style="width: 180px;">
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left: 10px;">
+            <label style="font-size:13px;">表示:</label>
+            <button id="btnFitView" style="padding: 2px 8px; font-size: 11px; background: #3b82f6;" title="画面サイズに合わせて全体を表示">フィット</button>
+            <button id="btnZoomOut" style="padding: 2px 8px; font-size: 14px; background: #64748b;" title="縮小">－</button>
+            <span id="zoomLevel" style="font-size: 13px; width: 40px; text-align: center;">49%</span>
+            <button id="btnZoomIn" style="padding: 2px 8px; font-size: 14px; background: #64748b;" title="拡大">＋</button>
+            <label style="font-size:13px; margin-left: 10px; cursor: pointer;"><input type="checkbox" id="chkBgMap" checked=""> 背景地図</label>
+            <select id="bgMapType" style="margin-left:5px; font-size:13px;">
+                <option value="https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png" selected="">標準地図</option>
+                <option value="https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg">航空写真</option>
+                <option value="https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png">淡色地図</option>
+            </select>
+        </div>
+        <div style="flex: 1;"></div>
+        <button id="btnPrint" class="btn-green">🖨️ 印刷する</button>
+        <button id="btnExportHtml" class="btn-purple">📄 HTML保存</button>
+    </div>
+    <div class="print-workspace" id="workspace">
+        <div class="print-canvas-container" id="canvasWrap" style="width: 1122.51px; height: 793.695px; transform: scale(0.489924); margin-bottom: -365px;">
+            <div id="bg-map" class="print-canvas-layer" style="z-index:0; display:none;"></div>
+            <div id="canvas" class="print-canvas-layer" style="z-index:1;"></div>
+        <div class="print-draggable print-hover-outline" id="pl-map" data-scale="1" style="z-index: 0; opacity: 1; left: 329.367px; top: 95.1172px;"><div id="map-cropper" class="map-cropper" style="position:absolute; top:0px; left:0px; width:463.77702033835004px; height:599.4621160369803px; z-index:0; overflow:hidden; background:rgba(0,0,0,0.01); pointer-events:auto;"><div id="bg-map-inner" style="position:absolute; top:0px; left:0px; width:463.77702033835004px; height:599.4621160369803px; pointer-events:none;" class="leaflet-container leaflet-touch leaflet-fade-anim leaflet-grab leaflet-touch-drag leaflet-touch-zoom" tabindex="0"><div class="leaflet-pane leaflet-map-pane" style="transform: translate3d(0px, 0px, 0px);"><div class="leaflet-pane leaflet-tile-pane"><div class="leaflet-layer " style="z-index: 1; opacity: 1;"><div class="leaflet-tile-container leaflet-zoom-animated" style="z-index: 22; transform: translate3d(0px, 0px, 0px) scale(0.932333);"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229741/104600.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(49px, 83px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229741/104601.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(49px, 339px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229740/104600.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(-207px, 83px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229742/104600.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(305px, 83px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229740/104601.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(-207px, 339px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229742/104601.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(305px, 339px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229741/104599.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(49px, -173px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229741/104602.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(49px, 595px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229740/104599.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(-207px, -173px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229742/104599.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(305px, -173px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229740/104602.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(-207px, 595px, 0px); opacity: 1;"><img alt="" src="https://cyberjapandata.gsi.go.jp/xyz/std/18/229742/104602.png" class="leaflet-tile leaflet-tile-loaded" style="width: 256px; height: 256px; transform: translate3d(305px, 595px, 0px); opacity: 1;"></div></div></div><div class="leaflet-pane leaflet-overlay-pane"></div><div class="leaflet-pane leaflet-shadow-pane"></div><div class="leaflet-pane leaflet-marker-pane"></div><div class="leaflet-pane leaflet-tooltip-pane"></div><div class="leaflet-pane leaflet-popup-pane"></div><div class="leaflet-proxy leaflet-zoom-animated" style="transform: translate3d(5.48341e+07px, 2.49659e+07px, 0px) scale(122203);"></div></div><div class="leaflet-control-container"><div class="leaflet-top leaflet-left"></div><div class="leaflet-top leaflet-right"></div><div class="leaflet-bottom leaflet-left"></div><div class="leaflet-bottom leaflet-right"></div></div></div><div class="resize-handle n" data-dir="n"></div><div class="resize-handle s" data-dir="s"></div><div class="resize-handle w" data-dir="w"></div><div class="resize-handle e" data-dir="e"></div><div class="resize-handle nw" data-dir="nw"></div><div class="resize-handle ne" data-dir="ne"></div><div class="resize-handle sw" data-dir="sw"></div><div class="resize-handle se" data-dir="se"></div></div><svg width="463.77702033835004px" height="599.4621160369803px" viewBox="-66.85084176290698 -95.70112652063216 245.41712942894566 317.217682781839" style="position:relative; z-index:1; overflow:visible; pointer-events:none;"><g><polygon style="pointer-events:auto;" points="119.54205695406398,70.68659598008482 101.81951935119088,31.804412640134935 31.021338522284207,84.19991580026246 30.543096718454755,102.49100862021974 23.571802737996542,121.21987878008231 17.81450718023101,132.818756070546 15.349722500765774,143.11207911035842 4.855993698612511,152.43540312044087 -5.058326765140391,159.8109513004198 -12.792968241328701,168.59094252054769 -20.88629106973562,174.6042698399237 -3.669586144944911,188.83425561018672 17.65815889976815,207.09757068021415 40.07114495835004,200.3753551806068 59.71584673114003,190.9098090905992 92.48460722583833,182.3242621199804 119.47767824834509,180.61537493990534 135.97702046869858,181.01981898021057 151.81418173050682,166.8842775606565 164.147302085046,159.54317379036954 162.51944056162884,145.43985456032357 149.22063964221772,125.32765245047983 140.5938932640894,103.4410076706634 137.88079072418947,92.19990780059119" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon><polygon style="pointer-events:auto;" points="95.06803266040893,64.71993528062255 62.016005866820954,88.89546666034444 64.97650656803617,114.05099706062371 119.24039673813435,109.11322422023747" fill="#fff" fill-opacity="0.5" stroke="none"></polygon><polygon style="pointer-events:auto;" points="119.54205695406398,70.68659598008482 101.81951935119088,31.804412640134935 31.021338522284207,84.19991580026246 30.543096718454755,102.49100862021974 23.571802737996542,121.21987878008231 17.81450718023101,132.818756070546 15.349722500765774,143.11207911035842 4.855993698612511,152.43540312044087 -5.058326765140391,159.8109513004198 -12.792968241328701,168.59094252054769 -20.88629106973562,174.6042698399237 -3.669586144944911,188.83425561018672 17.65815889976815,207.09757068021415 40.07114495835004,200.3753551806068 59.71584673114003,190.9098090905992 92.48460722583833,182.3242621199804 119.47767824834509,180.61537493990534 135.97702046869858,181.01981898021057 151.81418173050682,166.8842775606565 164.147302085046,159.54317379036954 162.51944056162884,145.43985456032357 149.22063964221772,125.32765245047983 140.5938932640894,103.4410076706634 137.88079072418947,92.19990780059119" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon><polygon style="pointer-events:auto;" points="95.06803266040893,64.71993528062255 62.016005866820954,88.89546666034444 64.97650656803617,114.05099706062371 119.24039673813435,109.11322422023747" fill="#fff" fill-opacity="0.5" stroke="none"></polygon></g><g class="svg-draggable" style="pointer-events:auto;"><rect x="61.68246173021688" y="123.34819286199442" width="31.750231512104776" height="16.51012038629448" fill="#fff" fill-opacity="0.5" stroke="#4f46e5" stroke-width="0.3968778939013097"></rect><text x="77.55757748626927" y="130.33324379465748" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">区画 1</text><text x="77.55757748626927" y="137.95329935756263" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">1.5347ha</text></g><g class="svg-draggable" style="pointer-events:auto;"><rect x="72.19999510432501" y="86.56777730808373" width="31.750231512104776" height="16.51012038629448" fill="#fff" fill-opacity="0.5" stroke="undefined" stroke-width="0.3968778939013097"></rect><text x="88.07511086037741" y="93.55282824074679" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#A13D44">除地 1</text><text x="88.07511086037741" y="101.17288380365194" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#A13D44">0.1716ha</text></g><g><polygon style="pointer-events:auto;" points="15.331328586339767,-32.268856619878136 0,0 4.212206654493258,5.119994880463025 3.844328345061646,13.585541970626892 13.749451851601544,25.225530330544657 16.13146391092188,38.07440637022086 23.203924425950998,62.057715720617544 31.021338522284207,84.19991580026246 101.81951935119088,31.804412640134935 85.45813149687423,5.0944393499275336 75.56220495016127,-1.2222210000721532 53.075643228647486,-15.032207189532365" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon><polygon style="pointer-events:auto;" points="15.331328586339767,-32.268856619878136 0,0 4.212206654493258,5.119994880463025 3.844328345061646,13.585541970626892 13.749451851601544,25.225530330544657 16.13146391092188,38.07440637022086 23.203924425950998,62.057715720617544 31.021338522284207,84.19991580026246 101.81951935119088,31.804412640134935 85.45813149687423,5.0944393499275336 75.56220495016127,-1.2222210000721532 53.075643228647486,-15.032207189532365" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon></g><g class="svg-draggable" style="pointer-events:auto;"><rect x="29.807645828457872" y="14.96796741163009" width="31.750231512104776" height="16.51012038629448" fill="#fff" fill-opacity="0.5" stroke="#4f46e5" stroke-width="0.3968778939013097"></rect><text x="45.68276158451026" y="21.953018344293138" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">区画 2</text><text x="45.68276158451026" y="29.573073907198285" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">0.6309ha</text></g><g><polygon style="pointer-events:auto;" points="72.37545908634534,-77.82881105970547 71.38954521403647,-44.28773348956563 120.7201872417962,-48.72772904981913 118.74743980328688,-81.28214093963948" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon><polygon style="pointer-events:auto;" points="72.37545908634534,-77.82881105970547 71.38954521403647,-44.28773348956563 120.7201872417962,-48.72772904981913 118.74743980328688,-81.28214093963948" fill="#6366f1" fill-opacity="0.2" stroke="none"></polygon></g><g class="svg-draggable" style="pointer-events:auto;"><rect x="79.84609539273077" y="-70.47336085801018" width="31.750231512104776" height="16.51012038629448" fill="#fff" fill-opacity="0.5" stroke="#4f46e5" stroke-width="0.3968778939013097"></rect><text x="95.72121114878315" y="-63.48830992534713" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">区画 3</text><text x="95.72121114878315" y="-55.86825436244199" font-size="6.350046302420955" font-family="sans-serif" text-anchor="middle" fill="#0f766e">0.1583ha</text></g><g><line style="pointer-events:auto;" x1="0" y1="0" x2="15.331328586339767" y2="-32.268856619878136" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="15.331328586339767" y1="-32.268856619878136" x2="53.075643228647486" y2="-15.032207189532365" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="53.075643228647486" y1="-15.032207189532365" x2="75.56220495016127" y2="-1.2222210000721532" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="75.56220495016127" y1="-1.2222210000721532" x2="85.45813149687423" y2="5.0944393499275336" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="85.45813149687423" y1="5.0944393499275336" x2="101.81951935119088" y2="31.804412640134935" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="101.81951935119088" y1="31.804412640134935" x2="119.54205695406398" y2="70.68659598008482" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="119.54205695406398" y1="70.68659598008482" x2="137.88079072418947" y2="92.19990780059119" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="137.88079072418947" y1="92.19990780059119" x2="140.5938932640894" y2="103.4410076706634" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="140.5938932640894" y1="103.4410076706634" x2="149.22063964221772" y2="125.32765245047983" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="149.22063964221772" y1="125.32765245047983" x2="162.51944056162884" y2="145.43985456032357" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="162.51944056162884" y1="145.43985456032357" x2="164.147302085046" y2="159.54317379036954" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="164.147302085046" y1="159.54317379036954" x2="151.81418173050682" y2="166.8842775606565" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="151.81418173050682" y1="166.8842775606565" x2="135.97702046869858" y2="181.01981898021057" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="135.97702046869858" y1="181.01981898021057" x2="119.47767824834509" y2="180.61537493990534" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="119.47767824834509" y1="180.61537493990534" x2="92.48460722583833" y2="182.3242621199804" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="92.48460722583833" y1="182.3242621199804" x2="59.71584673114003" y2="190.9098090905992" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="59.71584673114003" y1="190.9098090905992" x2="40.07114495835004" y2="200.3753551806068" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="40.07114495835004" y1="200.3753551806068" x2="17.65815889976815" y2="207.09757068021415" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="17.65815889976815" y1="207.09757068021415" x2="-3.669586144944911" y2="188.83425561018672" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-3.669586144944911" y1="188.83425561018672" x2="-20.88629106973562" y2="174.6042698399237" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-20.88629106973562" y1="174.6042698399237" x2="-12.792968241328701" y2="168.59094252054769" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-12.792968241328701" y1="168.59094252054769" x2="-5.058326765140391" y2="159.8109513004198" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-5.058326765140391" y1="159.8109513004198" x2="4.855993698612511" y2="152.43540312044087" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="4.855993698612511" y1="152.43540312044087" x2="15.349722500765774" y2="143.11207911035842" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="15.349722500765774" y1="143.11207911035842" x2="17.81450718023101" y2="132.818756070546" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="17.81450718023101" y1="132.818756070546" x2="23.571802737996542" y2="121.21987878008231" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="23.571802737996542" y1="121.21987878008231" x2="30.543096718454755" y2="102.49100862021974" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="30.543096718454755" y1="102.49100862021974" x2="31.021338522284207" y2="84.19991580026246" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="31.021338522284207" y1="84.19991580026246" x2="23.203924425950998" y2="62.057715720617544" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="23.203924425950998" y1="62.057715720617544" x2="16.13146391092188" y2="38.07440637022086" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="16.13146391092188" y1="38.07440637022086" x2="13.749451851601544" y2="25.225530330544657" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="13.749451851601544" y1="25.225530330544657" x2="3.844328345061646" y2="13.585541970626892" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="3.844328345061646" y1="13.585541970626892" x2="4.212206654493258" y2="5.119994880463025" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="4.212206654493258" y1="5.119994880463025" x2="0" y2="0" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="62.016005866820954" y1="88.89546666034444" x2="95.06803266040893" y2="64.71993528062255" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="95.06803266040893" y1="64.71993528062255" x2="119.24039673813435" y2="109.11322422023747" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="119.24039673813435" y1="109.11322422023747" x2="64.97650656803617" y2="114.05099706062371" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="64.97650656803617" y1="114.05099706062371" x2="62.016005866820954" y2="88.89546666034444" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="40.80414249031075" y1="-43.301067810035626" x2="71.38954521403647" y2="-44.28773348956563" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="71.38954521403647" y1="-44.28773348956563" x2="72.37545908634534" y2="-77.82881105970547" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="72.37545908634534" y1="-77.82881105970547" x2="118.74743980328688" y2="-81.28214093963948" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="118.74743980328688" y1="-81.28214093963948" x2="120.7201872417962" y2="-48.72772904981913" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-10.50016667246376" y1="38.57773920002378" x2="-35.659364319003544" y2="49.92328341005335" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-35.659364319003544" y1="49.92328341005335" x2="-52.431856181914306" y2="70.63881825007913" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="-10.50016667246376" y1="38.57773920002378" x2="13.749451851601544" y2="25.225530330544657" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="15.331328586339767" y1="-32.268856619878136" x2="40.80414249031075" y2="-43.301067810035626" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="71.38954521403647" y1="-44.28773348956563" x2="120.7201872417962" y2="-48.72772904981913" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><line style="pointer-events:auto;" x1="31.021338522284207" y1="84.19991580026246" x2="101.81951935119088" y2="31.804412640134935" stroke="#0ea5e9" stroke-width="0.7937557878026194" stroke-linecap="round" stroke-linejoin="round"></line></g><g><circle style="pointer-events:auto;" cx="0" cy="0" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="2.7781452573091676" y="-2.7781452573091676" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">1</text></g><g><circle style="pointer-events:auto;" cx="15.331328586339767" cy="-32.268856619878136" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="18.109473843648935" y="-35.047001877187306" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">2</text></g><g><circle style="pointer-events:auto;" cx="53.075643228647486" cy="-15.032207189532365" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="55.853788485956656" y="-17.81035244684153" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">3</text></g><g><circle style="pointer-events:auto;" cx="75.56220495016127" cy="-1.2222210000721532" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="78.34035020747044" y="-4.000366257381321" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">4</text></g><g><circle style="pointer-events:auto;" cx="85.45813149687423" cy="5.0944393499275336" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="88.2362767541834" y="2.316294092618366" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">5</text></g><g><circle style="pointer-events:auto;" cx="101.81951935119088" cy="31.804412640134935" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="104.59766460850004" y="29.02626738282577" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">6</text></g><g><circle style="pointer-events:auto;" cx="119.54205695406398" cy="70.68659598008482" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="122.32020221137314" y="67.90845072277565" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">7</text></g><g><circle style="pointer-events:auto;" cx="137.88079072418947" cy="92.19990780059119" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="140.65893598149864" y="89.42176254328203" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">8</text></g><g><circle style="pointer-events:auto;" cx="140.5938932640894" cy="103.4410076706634" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="143.37203852139857" y="100.66286241335423" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">9</text></g><g><circle style="pointer-events:auto;" cx="149.22063964221772" cy="125.32765245047983" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="151.9987848995269" y="122.54950719317067" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">10</text></g><g><circle style="pointer-events:auto;" cx="162.51944056162884" cy="145.43985456032357" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="165.29758581893802" y="142.6617093030144" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">11</text></g><g><circle style="pointer-events:auto;" cx="164.147302085046" cy="159.54317379036954" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="166.92544734235517" y="156.76502853306036" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">12</text></g><g><circle style="pointer-events:auto;" cx="151.81418173050682" cy="166.8842775606565" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="154.592326987816" y="164.10613230334732" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">13</text></g><g><circle style="pointer-events:auto;" cx="135.97702046869858" cy="181.01981898021057" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="138.75516572600776" y="178.2416737229014" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">14</text></g><g><circle style="pointer-events:auto;" cx="119.47767824834509" cy="180.61537493990534" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="122.25582350565425" y="177.83722968259616" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">15</text></g><g><circle style="pointer-events:auto;" cx="92.48460722583833" cy="182.3242621199804" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="95.2627524831475" y="179.54611686267123" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">16</text></g><g><circle style="pointer-events:auto;" cx="59.71584673114003" cy="190.9098090905992" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="62.4939919884492" y="188.13166383329002" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">17</text></g><g><circle style="pointer-events:auto;" cx="40.07114495835004" cy="200.3753551806068" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="42.84929021565921" y="197.5972099232976" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">18</text></g><g><circle style="pointer-events:auto;" cx="17.65815889976815" cy="207.09757068021415" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="20.436304157077316" y="204.31942542290497" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">19</text></g><g><circle style="pointer-events:auto;" cx="-3.669586144944911" cy="188.83425561018672" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-0.8914408876357434" y="186.05611035287754" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">20</text></g><g><circle style="pointer-events:auto;" cx="-20.88629106973562" cy="174.6042698399237" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-18.108145812426454" y="171.8261245826145" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">21</text></g><g><circle style="pointer-events:auto;" cx="-12.792968241328701" cy="168.59094252054769" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-10.014822984019533" y="165.8127972632385" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">22</text></g><g><circle style="pointer-events:auto;" cx="-5.058326765140391" cy="159.8109513004198" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-2.2801815078312235" y="157.0328060431106" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">23</text></g><g><circle style="pointer-events:auto;" cx="4.855993698612511" cy="152.43540312044087" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="7.634138955921678" y="149.6572578631317" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">24</text></g><g><circle style="pointer-events:auto;" cx="15.349722500765774" cy="143.11207911035842" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="18.12786775807494" y="140.33393385304925" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">25</text></g><g><circle style="pointer-events:auto;" cx="17.81450718023101" cy="132.818756070546" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="20.592652437540178" y="130.0406108132368" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">26</text></g><g><circle style="pointer-events:auto;" cx="23.571802737996542" cy="121.21987878008231" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="26.34994799530571" y="118.44173352277315" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">27</text></g><g><circle style="pointer-events:auto;" cx="30.543096718454755" cy="102.49100862021974" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="33.321241975763925" y="99.71286336291058" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">28</text></g><g><circle style="pointer-events:auto;" cx="31.021338522284207" cy="84.19991580026246" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="33.79948377959337" y="81.4217705429533" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">29</text></g><g><circle style="pointer-events:auto;" cx="23.203924425950998" cy="62.057715720617544" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="25.982069683260164" y="59.279570463308374" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">30</text></g><g><circle style="pointer-events:auto;" cx="16.13146391092188" cy="38.07440637022086" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="18.909609168231047" y="35.296261112911694" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">31</text></g><g><circle style="pointer-events:auto;" cx="13.749451851601544" cy="25.225530330544657" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="16.52759710891071" y="22.44738507323549" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">32</text></g><g><circle style="pointer-events:auto;" cx="3.844328345061646" cy="13.585541970626892" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="6.622473602370814" y="10.807396713317724" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">33</text></g><g><circle style="pointer-events:auto;" cx="4.212206654493258" cy="5.119994880463025" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="6.990351911802426" y="2.3418496231538577" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">34</text></g><g><circle style="pointer-events:auto;" cx="62.016005866820954" cy="88.89546666034444" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="64.79415112413012" y="86.11732140303528" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">35</text></g><g><circle style="pointer-events:auto;" cx="95.06803266040893" cy="64.71993528062255" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="97.8461779177181" y="61.94179002331338" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">36</text></g><g><circle style="pointer-events:auto;" cx="119.24039673813435" cy="109.11322422023747" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="122.01854199544351" y="106.3350789629283" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">37</text></g><g><circle style="pointer-events:auto;" cx="64.97650656803617" cy="114.05099706062371" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="67.75465182534533" y="111.27285180331455" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">38</text></g><g><circle style="pointer-events:auto;" cx="40.80414249031075" cy="-43.301067810035626" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="43.58228774761992" y="-46.079213067344796" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">39</text></g><g><circle style="pointer-events:auto;" cx="71.38954521403647" cy="-44.28773348956563" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="74.16769047134564" y="-47.0658787468748" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">40</text></g><g><circle style="pointer-events:auto;" cx="72.37545908634534" cy="-77.82881105970547" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="75.15360434365451" y="-80.60695631701464" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">41</text></g><g><circle style="pointer-events:auto;" cx="118.74743980328688" cy="-81.28214093963948" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="121.52558506059604" y="-84.06028619694864" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">42</text></g><g><circle style="pointer-events:auto;" cx="120.7201872417962" cy="-48.72772904981913" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="123.49833249910536" y="-51.5058743071283" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">43</text></g><g><circle style="pointer-events:auto;" cx="-10.50016667246376" cy="38.57773920002378" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-7.722021415154591" y="35.79959394271461" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">45</text></g><g><circle style="pointer-events:auto;" cx="-35.659364319003544" cy="49.92328341005335" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-32.881219061694374" y="47.14513815274418" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">46</text></g><g><circle style="pointer-events:auto;" cx="-52.431856181914306" cy="70.63881825007913" r="1.8520968382061118" fill="#fff" stroke="#4f46e5" stroke-width="0.6350046302420955"></circle></g><g class="svg-draggable" style="pointer-events:auto;"><text x="-49.653710924605136" y="67.86067299276996" font-size="5.7150416721788595" font-family="sans-serif" fill="#333">47</text></g></svg></div><div class="print-draggable print-hover-outline" id="pl-attr" data-scale="1" style="z-index: 1; opacity: 1; left: 20px; top: 30px;"><div class="pl-box"><table class="pl-attr-table"><tbody><tr><th style="background:#f0f0f0; width:80px;">年度</th><td style="width:150px;">令和8年度</td></tr><tr><th style="background:#f0f0f0; width:80px;">事業名</th><td style="width:150px;">育成複層林整備</td></tr><tr><th style="background:#f0f0f0; width:80px;">所有者名</th><td style="width:150px;">山田太郎</td></tr><tr><th style="background:#f0f0f0; width:80px;">備考</th><td style="width:150px;">No.10</td></tr><tr><th style="background:#f0f0f0;">縮尺</th><td>1 / 2,000</td></tr></tbody></table></div></div><div class="print-draggable print-hover-outline" id="pl-area" data-scale="1" style="z-index: 1; opacity: 1; left: 20px; top: 185px;"><div class="pl-box"><div class="pl-table-title">面 積 表</div><table class="pl-table" style="min-width:180px;"><tbody><tr><td>区画 1</td><td style="text-align:right;">1.5347 ha</td></tr><tr><td style="padding-left:15px; color:#c00;">(内 除地1</td><td style="text-align:right; color:#c00;">0.1716 ha)</td></tr><tr><td>区画 2</td><td style="text-align:right;">0.6309 ha</td></tr><tr><td>区画 3</td><td style="text-align:right;">0.1583 ha</td></tr><tr style="border-top:1px solid #333; font-weight:bold;"><td>合計</td><td style="text-align:right;">2.3239 ha</td></tr></tbody></table></div></div><div class="print-draggable print-hover-outline" id="pl-survey" data-scale="0.7221333661417323" style="z-index: 1; opacity: 1; left: 952.973px; top: 30px; transform: scale(0.722133);"><div style="display:flex; gap:10px; background:transparent;"><div class="pl-box"><div class="pl-table-title">成 果 表</div><table class="pl-table"><thead><tr><th style="background:transparent;">測点名</th><th style="background:transparent;">緯度</th><th style="background:transparent;">経度</th></tr></thead><tbody><tr><td>1</td><td style="text-align:right;">34.13404829</td><td style="text-align:right;">135.50171650</td></tr><tr><td>2</td><td style="text-align:right;">34.13433871</td><td style="text-align:right;">135.50188320</td></tr><tr><td>3</td><td style="text-align:right;">34.13418358</td><td style="text-align:right;">135.50229360</td></tr><tr><td>4</td><td style="text-align:right;">34.13405929</td><td style="text-align:right;">135.50253810</td></tr><tr><td>5</td><td style="text-align:right;">34.13400244</td><td style="text-align:right;">135.50264570</td></tr><tr><td>6</td><td style="text-align:right;">34.13376205</td><td style="text-align:right;">135.50282360</td></tr><tr><td>7</td><td style="text-align:right;">34.13341211</td><td style="text-align:right;">135.50301630</td></tr><tr><td>8</td><td style="text-align:right;">34.13321849</td><td style="text-align:right;">135.50321570</td></tr><tr><td>9</td><td style="text-align:right;">34.13311732</td><td style="text-align:right;">135.50324520</td></tr><tr><td>10</td><td style="text-align:right;">34.13292034</td><td style="text-align:right;">135.50333900</td></tr><tr><td>11</td><td style="text-align:right;">34.13273933</td><td style="text-align:right;">135.50348360</td></tr><tr><td>12</td><td style="text-align:right;">34.13261240</td><td style="text-align:right;">135.50350130</td></tr><tr><td>13</td><td style="text-align:right;">34.13254633</td><td style="text-align:right;">135.50336720</td></tr><tr><td>14</td><td style="text-align:right;">34.13241911</td><td style="text-align:right;">135.50319500</td></tr><tr><td>15</td><td style="text-align:right;">34.13242275</td><td style="text-align:right;">135.50301560</td></tr><tr><td>16</td><td style="text-align:right;">34.13240737</td><td style="text-align:right;">135.50272210</td></tr><tr><td>17</td><td style="text-align:right;">34.13233010</td><td style="text-align:right;">135.50236580</td></tr><tr><td>18</td><td style="text-align:right;">34.13224491</td><td style="text-align:right;">135.50215220</td></tr><tr><td>19</td><td style="text-align:right;">34.13218441</td><td style="text-align:right;">135.50190850</td></tr><tr><td>20</td><td style="text-align:right;">34.13234878</td><td style="text-align:right;">135.50167660</td></tr><tr><td>21</td><td style="text-align:right;">34.13247685</td><td style="text-align:right;">135.50148940</td></tr><tr><td>22</td><td style="text-align:right;">34.13253097</td><td style="text-align:right;">135.50157740</td></tr><tr><td>23</td><td style="text-align:right;">34.13260999</td><td style="text-align:right;">135.50166150</td></tr><tr><td>24</td><td style="text-align:right;">34.13267637</td><td style="text-align:right;">135.50176930</td></tr><tr><td>25</td><td style="text-align:right;">34.13276028</td><td style="text-align:right;">135.50188340</td></tr><tr><td>26</td><td style="text-align:right;">34.13285292</td><td style="text-align:right;">135.50191020</td></tr><tr><td>27</td><td style="text-align:right;">34.13295731</td><td style="text-align:right;">135.50197280</td></tr><tr><td>28</td><td style="text-align:right;">34.13312587</td><td style="text-align:right;">135.50204860</td></tr><tr><td>29</td><td style="text-align:right;">34.13329049</td><td style="text-align:right;">135.50205380</td></tr><tr><td>30</td><td style="text-align:right;">34.13348977</td><td style="text-align:right;">135.50196880</td></tr><tr><td>31</td><td style="text-align:right;">34.13370562</td><td style="text-align:right;">135.50189190</td></tr><tr><td>32</td><td style="text-align:right;">34.13382126</td><td style="text-align:right;">135.50186600</td></tr><tr><td>33</td><td style="text-align:right;">34.13392602</td><td style="text-align:right;">135.50175830</td></tr><tr><td>34</td><td style="text-align:right;">34.13400221</td><td style="text-align:right;">135.50176230</td></tr><tr><td>35</td><td style="text-align:right;">34.13324823</td><td style="text-align:right;">135.50239081</td></tr><tr><td>36</td><td style="text-align:right;">34.13346581</td><td style="text-align:right;">135.50275019</td></tr><tr><td>37</td><td style="text-align:right;">34.13306627</td><td style="text-align:right;">135.50301302</td></tr><tr><td>38</td><td style="text-align:right;">34.13302183</td><td style="text-align:right;">135.50242300</td></tr><tr><td>39</td><td style="text-align:right;">34.13443800</td><td style="text-align:right;">135.50216017</td></tr><tr><td>40</td><td style="text-align:right;">34.13444688</td><td style="text-align:right;">135.50249273</td></tr><tr><td>41</td><td style="text-align:right;">34.13474875</td><td style="text-align:right;">135.50250345</td></tr><tr><td>42</td><td style="text-align:right;">34.13477983</td><td style="text-align:right;">135.50300766</td></tr><tr><td>43</td><td style="text-align:right;">34.13448684</td><td style="text-align:right;">135.50302911</td></tr><tr><td>45</td><td style="text-align:right;">34.13370109</td><td style="text-align:right;">135.50160233</td></tr><tr><td>46</td><td style="text-align:right;">34.13359898</td><td style="text-align:right;">135.50132877</td></tr><tr><td>47</td><td style="text-align:right;">34.13341254</td><td style="text-align:right;">135.50114640</td></tr></tbody></table></div></div></div><div class="print-draggable print-hover-outline" id="pl-summary" data-scale="1" style="z-index: 1; opacity: 1; left: 120px; top: 730.688px;"><div class="pl-box" style="padding: 5px 10px; font-size: 13px;">面積合計: 2.3239ha &nbsp;&nbsp; 測線長合計: 1263.5m</div></div><div class="print-draggable print-hover-outline" id="pl-compass" data-scale="1" style="z-index: 1; opacity: 1; left: 50px; top: 695.688px;"><div style="text-align:center; font-weight:bold; font-family:sans-serif; margin-bottom:-2px; font-size:18px; color:#333;">N</div><svg width="30" height="40" viewBox="0 0 30 40"><polygon style="pointer-events:auto;" points="15,0 8,20 22,20" fill="#333"></polygon><line style="pointer-events:auto;" x1="15" y1="20" x2="15" y2="40" stroke="#333" stroke-width="2"></line><line style="pointer-events:auto;" x1="0" y1="30" x2="30" y2="30" stroke="#333" stroke-width="1"></line></svg></div></div>
+    </div>
+    <div class="print-help-bar">💡 表や図面、方位記号をドラッグで自由に移動できます。背景ホイールで用紙全体を、表の上のホイールで表の拡大縮小が可能です。文字要素（区画名など）もドラッグで微調整できます。Ctrl+Pでも印刷できます。</div>
+<script>
+    const APP_DATA = {"points":[{"id":"p1","name":"1","lat":34.13404829,"lng":135.5017165},{"id":"p2","name":"2","lat":34.13433871,"lng":135.5018832},{"id":"p3","name":"3","lat":34.13418358,"lng":135.5022936},{"id":"p4","name":"4","lat":34.13405929,"lng":135.5025381},{"id":"p5","name":"5","lat":34.13400244,"lng":135.5026457},{"id":"p6","name":"6","lat":34.13376205,"lng":135.5028236},{"id":"p7","name":"7","lat":34.13341211,"lng":135.5030163},{"id":"p8","name":"8","lat":34.13321849,"lng":135.5032157},{"id":"p9","name":"9","lat":34.13311732,"lng":135.5032452},{"id":"p10","name":"10","lat":34.13292034,"lng":135.503339},{"id":"p11","name":"11","lat":34.13273933,"lng":135.5034836},{"id":"p12","name":"12","lat":34.1326124,"lng":135.5035013},{"id":"p13","name":"13","lat":34.13254633,"lng":135.5033672},{"id":"p14","name":"14","lat":34.13241911,"lng":135.503195},{"id":"p15","name":"15","lat":34.13242275,"lng":135.5030156},{"id":"p16","name":"16","lat":34.13240737,"lng":135.5027221},{"id":"p17","name":"17","lat":34.1323301,"lng":135.5023658},{"id":"p18","name":"18","lat":34.13224491,"lng":135.5021522},{"id":"p19","name":"19","lat":34.13218441,"lng":135.5019085},{"id":"p20","name":"20","lat":34.13234878,"lng":135.5016766},{"id":"p21","name":"21","lat":34.13247685,"lng":135.5014894},{"id":"p22","name":"22","lat":34.13253097,"lng":135.5015774},{"id":"p23","name":"23","lat":34.13260999,"lng":135.5016615},{"id":"p24","name":"24","lat":34.13267637,"lng":135.5017693},{"id":"p25","name":"25","lat":34.13276028,"lng":135.5018834},{"id":"p26","name":"26","lat":34.13285292,"lng":135.5019102},{"id":"p27","name":"27","lat":34.13295731,"lng":135.5019728},{"id":"p28","name":"28","lat":34.13312587,"lng":135.5020486},{"id":"p29","name":"29","lat":34.13329049,"lng":135.5020538},{"id":"p30","name":"30","lat":34.13348977,"lng":135.5019688},{"id":"p31","name":"31","lat":34.13370562,"lng":135.5018919},{"id":"p32","name":"32","lat":34.13382126,"lng":135.501866},{"id":"p33","name":"33","lat":34.13392602,"lng":135.5017583},{"id":"p34","name":"34","lat":34.13400221,"lng":135.5017623},{"id":"p35","name":"35","lat":34.13324823,"lng":135.50239081},{"id":"p36","name":"36","lat":34.13346581,"lng":135.50275019},{"id":"p37","name":"37","lat":34.13306627,"lng":135.50301302},{"id":"p38","name":"38","lat":34.13302183,"lng":135.502423},{"id":"p39","name":"39","lat":34.134438,"lng":135.50216017},{"id":"p40","name":"40","lat":34.13444688,"lng":135.50249273},{"id":"p41","name":"41","lat":34.13474875,"lng":135.50250345},{"id":"p42","name":"42","lat":34.13477983,"lng":135.50300766},{"id":"p43","name":"43","lat":34.13448684,"lng":135.50302911},{"id":"p44","name":"45","lat":34.13370109,"lng":135.50160233},{"id":"p45","name":"46","lat":34.13359898,"lng":135.50132877},{"id":"p46","name":"47","lat":34.13341254,"lng":135.5011464}],"edges":[{"from":"p1","to":"p2"},{"from":"p2","to":"p3"},{"from":"p3","to":"p4"},{"from":"p4","to":"p5"},{"from":"p5","to":"p6"},{"from":"p6","to":"p7"},{"from":"p7","to":"p8"},{"from":"p8","to":"p9"},{"from":"p9","to":"p10"},{"from":"p10","to":"p11"},{"from":"p11","to":"p12"},{"from":"p12","to":"p13"},{"from":"p13","to":"p14"},{"from":"p14","to":"p15"},{"from":"p15","to":"p16"},{"from":"p16","to":"p17"},{"from":"p17","to":"p18"},{"from":"p18","to":"p19"},{"from":"p19","to":"p20"},{"from":"p20","to":"p21"},{"from":"p21","to":"p22"},{"from":"p22","to":"p23"},{"from":"p23","to":"p24"},{"from":"p24","to":"p25"},{"from":"p25","to":"p26"},{"from":"p26","to":"p27"},{"from":"p27","to":"p28"},{"from":"p28","to":"p29"},{"from":"p29","to":"p30"},{"from":"p30","to":"p31"},{"from":"p31","to":"p32"},{"from":"p32","to":"p33"},{"from":"p33","to":"p34"},{"from":"p34","to":"p1"},{"from":"p35","to":"p36"},{"from":"p36","to":"p37"},{"from":"p37","to":"p38"},{"from":"p38","to":"p35"},{"from":"p39","to":"p40"},{"from":"p40","to":"p41"},{"from":"p41","to":"p42"},{"from":"p42","to":"p43"},{"from":"p44","to":"p45"},{"from":"p45","to":"p46"},{"from":"p44","to":"p32"},{"from":"p2","to":"p39"},{"from":"p40","to":"p43"},{"from":"p29","to":"p6"}],"areas":[{"path":["p7","p6","p29","p28","p27","p26","p25","p24","p23","p22","p21","p20","p19","p18","p17","p16","p15","p14","p13","p12","p11","p10","p9","p8"],"area":17063.10822190411,"coords":[[34.13341211,135.5030163],[34.13376205,135.5028236],[34.13329049,135.5020538],[34.13312587,135.5020486],[34.13295731,135.5019728],[34.13285292,135.5019102],[34.13276028,135.5018834],[34.13267637,135.5017693],[34.13260999,135.5016615],[34.13253097,135.5015774],[34.13247685,135.5014894],[34.13234878,135.5016766],[34.13218441,135.5019085],[34.13224491,135.5021522],[34.1323301,135.5023658],[34.13240737,135.5027221],[34.13242275,135.5030156],[34.13241911,135.503195],[34.13254633,135.5033672],[34.1326124,135.5035013],[34.13273933,135.5034836],[34.13292034,135.503339],[34.13311732,135.5032452],[34.13321849,135.5032157]],"center":{"lat":34.13286957458546,"lng":135.50255979600632},"children":[{"path":["p36","p35","p38","p37"],"area":1715.661570269242,"coords":[[34.13346581,135.50275019],[34.13324823,135.50239081],[34.13302183,135.502423],[34.13306627,135.50301302]],"center":{"lat":34.13320059865647,"lng":135.50267415483725},"children":[]}],"netArea":15347.446651634868,"holes":[{"path":["p36","p35","p38","p37"],"area":1715.661570269242,"coords":[[34.13346581,135.50275019],[34.13324823,135.50239081],[34.13302183,135.502423],[34.13306627,135.50301302]],"center":{"lat":34.13320059865647,"lng":135.50267415483725},"children":[]}]},{"path":["p2","p1","p34","p33","p32","p31","p30","p29","p6","p5","p4","p3"],"area":6308.9342146089375,"coords":[[34.13433871,135.5018832],[34.13404829,135.5017165],[34.13400221,135.5017623],[34.13392602,135.5017583],[34.13382126,135.501866],[34.13370562,135.5018919],[34.13348977,135.5019688],[34.13329049,135.5020538],[34.13376205,135.5028236],[34.13400244,135.5026457],[34.13405929,135.5025381],[34.13418358,135.5022936]],"center":{"lat":34.13384499758994,"lng":135.50221321600958},"children":[],"netArea":6308.9342146089375,"holes":[]},{"path":["p41","p40","p43","p42"],"area":1583.3252728515672,"coords":[[34.13474875,135.50250345],[34.13444688,135.50249273],[34.13448684,135.50302911],[34.13477983,135.50300766]],"center":{"lat":34.13461397031334,"lng":135.5027572921147},"children":[],"netArea":1583.3252728515672,"holes":[]}],"customTexts":[],"customLines":[],"attributes":[{"name":"年度","value":"令和8年度"},{"name":"事業名","value":"育成複層林整備"},{"name":"所有者名","value":"山田太郎"},{"name":"備考","value":"No.10"}],"filename":"令和8年度_育成複層林整備_山田太郎_No.10","isMapView":true,"activeBgUrl":"https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png"};
+    const COLORS = {"polyFill":"#6366f1","polyBorder":"#4f46e5","line":"#0ea5e9","lineHover":"#ef4444","rubberBand":"#f59e0b","pointFill":"#ffffff","pointHoverFill":"#fef3c7","pointSelected":"#f59e0b","pointBorder":"#4f46e5","pointBorderSelected":"#d97706"};
+    
+    class GeoUtils {
+        static LAT_DEG_PER_METER = 1 / 111111;
+        static getLonDegPerMeter(lat) { return this.LAT_DEG_PER_METER / Math.cos(lat * Math.PI / 180); }
+        static m2ToHa(sqMeters) { return Math.round(((sqMeters / 10000) + Number.EPSILON) * 10000) / 10000; }
+    }
+    const els = {
+        paperSize: document.getElementById('paperSize'),
+        paperOrient: document.getElementById('paperOrient'),
+        scale: document.getElementById('scale'),
+        btnAutoScale: document.getElementById('btnAutoScale'),
+        tableWrap: document.getElementById('tableWrap'),
+        filename: document.getElementById('filename'),
+        btnPrint: document.getElementById('btnPrint'),
+        btnExport: document.getElementById('btnExportHtml'),
+        canvasWrap: document.getElementById('canvasWrap'),
+        canvas: document.getElementById('canvas'),
+        chkBgMap: document.getElementById('chkBgMap'),
+        bgMapType: document.getElementById('bgMapType'),
+        dynamicStyle: document.getElementById('dynamicStyle'),
+        workspace: document.getElementById('workspace')
+    };
+    const positions = {};
+    function calcAutoScale() {
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const p0 = APP_DATA.points[0];
+        const lonDegPerMeter = GeoUtils.getLonDegPerMeter(p0.lat);
+        APP_DATA.points.forEach(p => {
+            const x = (p.lng - p0.lng) / lonDegPerMeter;
+            const y = -(p.lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        });
+        const w = maxX - minX || 10;
+        const h = maxY - minY || 10;
+        const pad = Math.max(w, h) * 0.05;
+        const paperSize = els.paperSize.value;
+        const paperOrient = els.paperOrient.value;
+        const paperDims = { 'A4': [210, 297], 'A3': [297, 420], 'A2': [420, 594], 'A1': [594, 841], 'A0': [841, 1189] };
+        let [paperW_mm, paperH_mm] = paperDims[paperSize] || [210, 297];
+        if (paperOrient === 'landscape') { const tmp = paperW_mm; paperW_mm = paperH_mm; paperH_mm = tmp; }
+        const availableW_m = (paperW_mm - 20) / 1000;
+        const availableH_m = (paperH_mm - 20) / 1000;
+        const reqScaleW = (w + pad*2) / availableW_m;
+        const reqScaleH = (h + pad*2) / availableH_m;
+        const reqScale = Math.max(reqScaleW, reqScaleH);
+        const predefinedScales = [100, 200, 300, 400, 500, 600, 1000, 2000, 3000, 4000, 5000, 6000];
+        els.scale.value = predefinedScales.find(s => s >= reqScale) || 6000;
+    }
+    function renderCanvas() {
+        els.canvas.innerHTML = '';
+        els.canvasWrap.querySelectorAll('.print-draggable').forEach(e => e.remove());
+        const paperSize = els.paperSize.value;
+        const paperOrient = els.paperOrient.value;
+        const scaleVal = parseFloat(els.scale.value) || 1000;
+        let wrapLimit = parseInt(els.tableWrap.value, 10);
+        els.dynamicStyle.textContent = '@page { size: ' + paperSize + ' ' + paperOrient + '; margin: 0; }';
+        const paperDims = { 'A4': [210, 297], 'A3': [297, 420], 'A2': [420, 594], 'A1': [594, 841], 'A0': [841, 1189] };
+        let [paperW_mm, paperH_mm] = paperDims[paperSize] || [210, 297];
+        if (paperOrient === 'landscape') { const tmp = paperW_mm; paperW_mm = paperH_mm; paperH_mm = tmp; }
+        const paperW_px = paperW_mm * 3.7795;
+        const paperH_px = paperH_mm * 3.7795;
+        els.canvasWrap.style.width = paperW_px + 'px';
+        els.canvasWrap.style.height = paperH_px + 'px';
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        const localPoints = {};
+        const p0 = APP_DATA.points[0];
+        const lonDegPerMeter = GeoUtils.getLonDegPerMeter(p0.lat);
+        APP_DATA.points.forEach(p => {
+            const x = (p.lng - p0.lng) / lonDegPerMeter;
+            const y = -(p.lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;
+            localPoints[p.id] = { x, y, name: p.name };
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+        });
+        const w = maxX - minX || 10;
+        const h = maxY - minY || 10;
+        const pad = Math.max(w, h) * 0.05;
+        const pxPerMeter = (1000 / scaleVal) * 3.7795;
+        const svgW_px = (w + pad*2) * pxPerMeter;
+        const svgH_px = (h + pad*2) * pxPerMeter;
+        const viewBox = (minX - pad) + ' ' + (minY - pad) + ' ' + (w + pad*2) + ' ' + (h + pad*2);
+        const fontSize = 12 / pxPerMeter;
+        const strokeW = 1.5 / pxPerMeter;
+        const radius = 3.5 / pxPerMeter;
+        let svgInner = '';
+        APP_DATA.areas.forEach((area, i) => {
+            let areaSvg = '';
+            const coordsToLocal = (coords) => coords.map(c => ((c[1] - p0.lng) / lonDegPerMeter) + ',' + (-(c[0] - p0.lat) / GeoUtils.LAT_DEG_PER_METER)).join(' ');
+            areaSvg += '<polygon style="pointer-events:auto;" points="' + coordsToLocal(area.coords) + '" fill="' + COLORS.polyFill + '" fill-opacity="0.2" stroke="none" />';
+            area.holes.forEach(hole => areaSvg += '<polygon style="pointer-events:auto;" points="' + coordsToLocal(hole.coords) + '" fill="#fff" fill-opacity="0.5" stroke="none" />');
+            areaSvg += '<polygon style="pointer-events:auto;" points="' + coordsToLocal(area.coords) + '" fill="' + COLORS.polyFill + '" fill-opacity="0.2" stroke="none" style="pointer-events:auto;" />';
+            area.holes.forEach(hole => areaSvg += '<polygon style="pointer-events:auto;" points="' + coordsToLocal(hole.coords) + '" fill="#fff" fill-opacity="0.5" stroke="none" style="pointer-events:auto;" />');
+            svgInner += '<g>' + areaSvg + '</g>';
+            const cx = (area.center.lng - p0.lng) / lonDegPerMeter;
+            const cy = -(area.center.lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;
+            svgInner += '<g class="svg-draggable" style="pointer-events:auto;">' +
+                '<rect x="' + (cx - fontSize*2.5) + '" y="' + (cy - fontSize*1.2) + '" width="' + (fontSize*5) + '" height="' + (fontSize*2.6) + '" fill="#fff" fill-opacity="0.5" stroke="' + COLORS.polyBorder + '" stroke-width="' + (strokeW*0.5) + '" />' +
+                '<text x="' + cx + '" y="' + (cy - fontSize*0.1) + '" font-size="' + fontSize + '" font-family="sans-serif" text-anchor="middle" fill="#0f766e">区画 ' + (i+1) + '</text>' +
+                '<text x="' + cx + '" y="' + (cy + fontSize*1.1) + '" font-size="' + fontSize + '" font-family="sans-serif" text-anchor="middle" fill="#0f766e">' + GeoUtils.m2ToHa(area.netArea).toFixed(4) + 'ha</text>' +
+            '</g>';
+            area.holes.forEach((hole, j) => {
+                const hx = (hole.center.lng - p0.lng) / lonDegPerMeter;
+                const hy = -(hole.center.lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;
+                svgInner += '<g class="svg-draggable" style="pointer-events:auto;">' +
+                    '<rect x="' + (hx - fontSize*2.5) + '" y="' + (hy - fontSize*1.2) + '" width="' + (fontSize*5) + '" height="' + (fontSize*2.6) + '" fill="#fff" fill-opacity="0.5" stroke="' + COLORS.danger + '" stroke-width="' + (strokeW*0.5) + '" />' +
+                    '<text x="' + hx + '" y="' + (hy - fontSize*0.1) + '" font-size="' + fontSize + '" font-family="sans-serif" text-anchor="middle" fill="#A13D44">除地 ' + (j+1) + '</text>' +
+                    '<text x="' + hx + '" y="' + (hy + fontSize*1.1) + '" font-size="' + fontSize + '" font-family="sans-serif" text-anchor="middle" fill="#A13D44">' + GeoUtils.m2ToHa(hole.area).toFixed(4) + 'ha</text>' +
+                '</g>';
+            });
+        });
+        if(APP_DATA.customLines) {
+            APP_DATA.customLines.forEach(l => {
+                const pts = l.latlngs.map(p => ((p[1] - p0.lng) / lonDegPerMeter) + ',' + (-(p[0] - p0.lat) / GeoUtils.LAT_DEG_PER_METER)).join(' ');
+                const w = (l.weight || 2) * (strokeW / 2);
+                const c = l.color || '#333333';
+                const dash = l.dashArray ? ' stroke-dasharray="' + l.dashArray + '"' : '';
+                svgInner += '<g><polyline style="pointer-events:auto;" points="' + pts + '" fill="none" stroke="' + c + '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"' + dash + ' /></g>';
+            });
+        }
+        APP_DATA.edges.forEach(e => {
+            const p1 = localPoints[e.from], p2 = localPoints[e.to];
+            if (p1 && p2) svgInner += '<g><line style="pointer-events:auto;" x1="' + p1.x + '" y1="' + p1.y + '" x2="' + p2.x + '" y2="' + p2.y + '" stroke="' + COLORS.line + '" stroke-width="' + strokeW + '" stroke-linecap="round" stroke-linejoin="round" /></g>';
+        });
+        APP_DATA.points.forEach(p => {
+            const lp = localPoints[p.id];
+            svgInner += '<g><circle style="pointer-events:auto;" cx="' + lp.x + '" cy="' + lp.y + '" r="' + radius + '" fill="#fff" stroke="' + COLORS.pointBorder + '" stroke-width="' + (strokeW * 0.8) + '" /></g>';
+            svgInner += '<g class="svg-draggable" style="pointer-events:auto;"><text x="' + (lp.x + radius*1.5) + '" y="' + (lp.y - radius*1.5) + '" font-size="' + (fontSize*0.9) + '" font-family="sans-serif" fill="#333">' + lp.name + '</text></g>';
+        });
+        if(APP_DATA.customTexts) {
+            APP_DATA.customTexts.forEach(t => {
+                const x = (t.lng - p0.lng) / lonDegPerMeter;
+                const y = -(t.lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;
+                const fs = (t.fontSize || 16) * (strokeW / 4);
+                const color = t.color || '#000000';
+                const rot = t.rotation || 0;
+                const lines = t.text.split('\n');
+                let textSvg = '';
+                lines.forEach((line, idx) => {
+                    textSvg += '<text x="0" y="' + (idx * fs * 1.5) + '" font-size="' + fs + '" font-family="sans-serif" font-weight="bold" fill="' + color + '" stroke="#fff" stroke-width="' + (strokeW * 0.5) + '" paint-order="stroke">' + line + '</text>';
+                });
+                svgInner += '<g class="svg-draggable" style="pointer-events:auto;" transform="translate(' + x + ',' + y + ') rotate(' + rot + ')">' + textSvg + '</g>';
+            });
+        }
+        let svgHtml = '';
+        if (els.chkBgMap.checked) {
+            let cw = svgW_px, ch = svgH_px, cl = 0, ct = 0;
+            if (positions['map-cropper']) {
+                cw = positions['map-cropper'].w;
+                ch = positions['map-cropper'].h;
+                cl = positions['map-cropper'].l;
+                ct = positions['map-cropper'].t;
+            }
+            svgHtml += '<div id="map-cropper" class="map-cropper" style="position:absolute; top:' + ct + 'px; left:' + cl + 'px; width:' + cw + 'px; height:' + ch + 'px; z-index:0; overflow:hidden; background:rgba(0,0,0,0.01); pointer-events:auto;">';
+            svgHtml += '<div id="bg-map-inner" style="position:absolute; top:' + (-ct) + 'px; left:' + (-cl) + 'px; width:' + svgW_px + 'px; height:' + svgH_px + 'px; pointer-events:none;"></div>';
+            svgHtml += '';
+            svgHtml += '<div class="resize-handle n" data-dir="n"></div><div class="resize-handle s" data-dir="s"></div><div class="resize-handle w" data-dir="w"></div><div class="resize-handle e" data-dir="e"></div>';
+            svgHtml += '<div class="resize-handle nw" data-dir="nw"></div><div class="resize-handle ne" data-dir="ne"></div><div class="resize-handle sw" data-dir="sw"></div><div class="resize-handle se" data-dir="se"></div>';
+            svgHtml += '</div>';
+        }
+        svgHtml += '<svg width="' + svgW_px + 'px" height="' + svgH_px + 'px" viewBox="' + viewBox + '" style="position:relative; z-index:1; overflow:visible; pointer-events:none;">' + svgInner + '</svg>';
+        let totalLength = 0;
+        APP_DATA.edges.forEach(e => {
+            const p1 = APP_DATA.points.find(p=>p.id===e.from), p2 = APP_DATA.points.find(p=>p.id===e.to);
+            if(p1 && p2) totalLength += Math.sqrt(Math.pow((p2.lng - p1.lng) / GeoUtils.getLonDegPerMeter((p1.lat + p2.lat) / 2), 2) + Math.pow((p2.lat - p1.lat) / GeoUtils.LAT_DEG_PER_METER, 2));
+        });
+        if (wrapLimit === 0) wrapLimit = APP_DATA.points.length || 1;
+        let tableHtml = '<div style="display:flex; gap:10px; background:transparent;">';
+        for (let i = 0; i < APP_DATA.points.length; i += wrapLimit) {
+            const chunk = APP_DATA.points.slice(i, i + wrapLimit);
+            tableHtml += '<div class="pl-box"><div class="pl-table-title">成 果 表</div><table class="pl-table">' +
+                '<thead><tr><th style="background:transparent;">測点名</th><th style="background:transparent;">緯度</th><th style="background:transparent;">経度</th></tr></thead>' +
+                '<tbody>' + chunk.map(p => '<tr><td>' + p.name + '</td><td style="text-align:right;">' + p.lat.toFixed(8) + '</td><td style="text-align:right;">' + p.lng.toFixed(8) + '</td></tr>').join('') + '</tbody></table></div>';
+        }
+        tableHtml += '</div>';
+        let attrRows = APP_DATA.attributes.map(a => '<tr><th style="background:#f0f0f0; width:80px;">' + a.name + '</th><td style="width:150px;">' + a.value + '</td></tr>').join('');
+        attrRows += '<tr><th style="background:#f0f0f0;">縮尺</th><td>1 / ' + scaleVal.toLocaleString() + '</td></tr>';
+        const attrHtml = '<div class="pl-box"><table class="pl-attr-table">' + attrRows + '</table></div>';
+        let areaRows = APP_DATA.areas.map((a, idx) => {
+            let row = '<tr><td>区画 ' + (idx+1) + '</td><td style="text-align:right;">' + GeoUtils.m2ToHa(a.netArea).toFixed(4) + ' ha</td></tr>';
+            if (a.holes.length > 0) row += a.holes.map((h, j) => '<tr><td style="padding-left:15px; color:#c00;">(内 除地' + (j+1) + '</td><td style="text-align:right; color:#c00;">' + GeoUtils.m2ToHa(h.area).toFixed(4) + ' ha)</td></tr>').join('');
+            return row;
+        }).join('');
+        let totalArea = APP_DATA.areas.reduce((sum, a) => sum + GeoUtils.m2ToHa(a.netArea), 0);
+        areaRows += '<tr style="border-top:1px solid #333; font-weight:bold;"><td>合計</td><td style="text-align:right;">' + totalArea.toFixed(4) + ' ha</td></tr>';
+        const areaHtml = '<div class="pl-box"><div class="pl-table-title">面 積 表</div><table class="pl-table" style="min-width:180px;">' + areaRows + '</table></div>';
+        const summaryHtml = '<div class="pl-box" style="padding: 5px 10px; font-size: 13px;">面積合計: ' + totalArea.toFixed(4) + 'ha &nbsp;&nbsp; 測線長合計: ' + totalLength.toFixed(1) + 'm</div>';
+        const compassHtml = '<div style="text-align:center; font-weight:bold; font-family:sans-serif; margin-bottom:-2px; font-size:18px; color:#333;">N</div>' +
+            '<svg width="30" height="40" viewBox="0 0 30 40"><polygon style="pointer-events:auto;" points="15,0 8,20 22,20" fill="#333"/><line style="pointer-events:auto;" x1="15" y1="20" x2="15" y2="40" stroke="#333" stroke-width="2"/><line style="pointer-events:auto;" x1="0" y1="30" x2="30" y2="30" stroke="#333" stroke-width="1"/></svg>';
+        const createPlElement = (id, content, defaultPosFn) => {
+            const el = document.createElement('div'); el.className = 'print-draggable print-hover-outline'; el.id = id; el.innerHTML = content;
+            el.style.zIndex = (id === 'pl-map') ? '0' : '1';
+            el.setAttribute('data-scale', '1'); el.style.opacity = '0'; els.canvasWrap.appendChild(el);
+            setTimeout(() => {
+                const state = positions[id];
+                if (state) {
+                    el.style.left = state.left; el.style.top = state.top;
+                    if (state.scale) { el.style.transform = 'scale(' + state.scale + ')'; el.setAttribute('data-scale', state.scale); }
+                } else {
+                    const b = el.getBoundingClientRect(); const p = els.canvas.getBoundingClientRect(); const pos = defaultPosFn(b, p);
+                    el.style.left = pos.left + 'px'; el.style.top = pos.top + 'px';
+                    if (pos.scale) { el.style.transform = 'scale(' + pos.scale + ')'; el.setAttribute('data-scale', pos.scale); }
+                    positions[id] = { left: el.style.left, top: el.style.top, scale: pos.scale || 1 };
+                }
+                el.style.opacity = '1'; setupDraggable(el, id);
+            }, 10);
+        };
+        createPlElement('pl-map', svgHtml, (b, p) => ({ left: (p.width - b.width) / 2, top: (p.height - b.height) / 2 }));
+        createPlElement('pl-attr', attrHtml, () => ({ left: 20, top: 30 }));
+        createPlElement('pl-area', areaHtml, (b, p) => {
+            const attrEl = document.getElementById('pl-attr');
+            const attrBottom = attrEl ? attrEl.offsetTop + attrEl.offsetHeight : 30;
+            return { left: 20, top: attrBottom + 20 };
+        });
+        createPlElement('pl-survey', tableHtml, (b, p) => { let scale = 1; if (b.height > p.height - 60) scale = (p.height - 60) / b.height; return { left: Math.max(20, p.width - (b.width * scale) - 20), top: 30, scale: scale }; });
+        createPlElement('pl-summary', summaryHtml, (b, p) => ({ left: 120, top: p.height - b.height - 30 }));
+        createPlElement('pl-compass', compassHtml, (b, p) => ({ left: 50, top: p.height - b.height - 30 }));
+        setupMapCropper();
+        if (els.chkBgMap.checked) {
+            setTimeout(() => {
+                if (window.bgMapInstance) { window.bgMapInstance.remove(); window.bgMapInstance = null; }
+                if (window.L) {
+                    const z = Math.log2((360 * pxPerMeter) / (256 * lonDegPerMeter));
+                    const centerX_m = minX + w / 2;
+                    const centerY_m = minY + h / 2;
+                    const centerLng = p0.lng + centerX_m * lonDegPerMeter;
+                    const centerLat = p0.lat - centerY_m * GeoUtils.LAT_DEG_PER_METER;
+                    window.bgMapInstance = window.L.map('bg-map-inner', { zoomControl: false, attributionControl: false, zoomSnap: 0 });
+                    window.L.tileLayer(els.bgMapType.value, { maxZoom: 22, maxNativeZoom: 18 }).addTo(window.bgMapInstance);
+                    window.bgMapInstance.setView([centerLat, centerLng], z, { animate: false });
+                }
+            }, 20);
+        } else if (window.bgMapInstance) {
+            window.bgMapInstance.remove();
+            window.bgMapInstance = null;
+        }
+    }
+    els.chkBgMap.addEventListener('change', () => {
+        renderCanvas();
+    });
+    els.bgMapType.addEventListener('change', () => {
+        renderCanvas();
+    });
+    function setupDraggable(el, id) {
+        let startX, startY, initLeft, initTop;
+        el.onmousedown = (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.tagName === 'SELECT') return;
+            if (e.target.closest('.svg-draggable')) return;
+            e.stopPropagation(); e.preventDefault(); startX = e.clientX; startY = e.clientY; initLeft = el.offsetLeft; initTop = el.offsetTop;
+            els.canvasWrap.querySelectorAll('.print-draggable').forEach(d => { if(d.id !== 'pl-map') d.style.zIndex = '1'; });
+            if (id !== 'pl-map') el.style.zIndex = '10';
+            const onMouseMove = (eMove) => { el.style.left = (initLeft + (eMove.clientX - startX) / currentViewScale) + 'px'; el.style.top = (initTop + (eMove.clientY - startY) / currentViewScale) + 'px'; };
+            const onMouseUp = () => { document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp); if (!positions[id]) positions[id] = {}; positions[id].left = el.style.left; positions[id].top = el.style.top; };
+            document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+        };
+        el.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey || id === 'pl-map') return;
+            e.stopPropagation();
+            e.preventDefault(); let scale = parseFloat(el.getAttribute('data-scale')) || 1; scale += e.deltaY * -0.001; scale = Math.min(Math.max(0.3, scale), 5);
+            el.style.transform = 'scale(' + scale + ')'; el.setAttribute('data-scale', scale);
+            if (!positions[id]) positions[id] = {}; positions[id].scale = scale;
+        }, {passive: false});
+    }
+    function setupMapCropper() {
+        const cropper = document.getElementById('map-cropper');
+        if(!cropper) return;
+        const inner = document.getElementById('bg-map-inner');
+        let isResizing = false, startX, startY, initL, initT, initW, initH, dir;
+        const onMouseMove = (e) => {
+            if (!isResizing) return;
+            const dx = (e.clientX - startX) / currentViewScale;
+            const dy = (e.clientY - startY) / currentViewScale;
+            let l = initL, t = initT, w = initW, h = initH;
+            if (dir.includes('n')) { t += dy; h -= dy; }
+            if (dir.includes('s')) { h += dy; }
+            if (dir.includes('w')) { l += dx; w -= dx; }
+            if (dir.includes('e')) { w += dx; }
+            cropper.style.left = l + 'px'; cropper.style.top = t + 'px'; cropper.style.width = w + 'px'; cropper.style.height = h + 'px';
+            inner.style.left = -l + 'px'; inner.style.top = -t + 'px';
+        };
+        const onMouseUp = () => {
+            isResizing = false; cropper.classList.remove('active');
+            document.removeEventListener('mousemove', onMouseMove); document.removeEventListener('mouseup', onMouseUp);
+            if (!positions['map-cropper']) positions['map-cropper'] = {};
+            positions['map-cropper'] = { l: parseFloat(cropper.style.left), t: parseFloat(cropper.style.top), w: parseFloat(cropper.style.width), h: parseFloat(cropper.style.height) };
+            if (window.bgMapInstance) window.bgMapInstance.invalidateSize();
+        };
+        cropper.onmousedown = (e) => {
+            if(e.target.classList.contains('resize-handle')) {
+                isResizing = true; dir = e.target.getAttribute('data-dir');
+                e.stopPropagation(); e.preventDefault(); startX = e.clientX; startY = e.clientY;
+                initL = parseFloat(cropper.style.left); initT = parseFloat(cropper.style.top); initW = parseFloat(cropper.style.width); initH = parseFloat(cropper.style.height);
+                cropper.classList.add('active');
+                document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+            }
+        };
+    }
+    let activeSVGElem = null, ctmInverse = null, startTransformX = 0, startTransformY = 0, initialTransform = '';
+    document.addEventListener('mousedown', (e) => {
+        const draggableGroup = e.target.closest('.svg-draggable');
+        if (draggableGroup) {
+            e.stopPropagation(); e.preventDefault(); activeSVGElem = draggableGroup; const svg = activeSVGElem.closest('svg'); ctmInverse = svg.getScreenCTM().inverse();
+            let p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; p = p.matrixTransform(ctmInverse);
+            activeSVGElem.setAttribute('data-start-mx', p.x); activeSVGElem.setAttribute('data-start-my', p.y);
+            const transform = activeSVGElem.getAttribute('transform') || '';
+            startTransformX = 0; startTransformY = 0;
+            initialTransform = transform.replace(/translate\([^)]+\)/, '').trim();
+            const match = transform.match(/translate\(([-\d.]+)[,\s]+([-\d.]+)\)/);
+            if (match) { startTransformX = parseFloat(match[1]); startTransformY = parseFloat(match[2]); }
+        }
+    });
+    document.addEventListener('mousemove', (e) => {
+        if (activeSVGElem) {
+            const svg = activeSVGElem.closest('svg'); let p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; p = p.matrixTransform(ctmInverse);
+            const dx = (p.x - parseFloat(activeSVGElem.getAttribute('data-start-mx')));
+            const dy = (p.y - parseFloat(activeSVGElem.getAttribute('data-start-my')));
+            activeSVGElem.setAttribute('transform', 'translate(' + (startTransformX + dx) + ',' + (startTransformY + dy) + ') ' + initialTransform);
+        }
+    });
+    document.addEventListener('mouseup', () => { activeSVGElem = null; });
+    function exportHtmlFile() {
+        const filename = els.filename.value || 'GNSStoGIS_Export';
+        const paperSize = els.paperSize.value;
+        const paperOrient = els.paperOrient.value;
+        const cloneCanvas = els.canvasWrap.cloneNode(true);
+        cloneCanvas.querySelectorAll('.print-draggable').forEach(el => el.classList.remove('print-hover-outline'));
+        const sStart = '<scr' + 'ipt>'; const sEnd = '</scr' + 'ipt>';
+        const htmlStr = [
+            '<!DOCTYPE html>', '<html lang="ja">', '<head>', '<meta charset="UTF-8">', '<title>' + filename + '</title>',
+            '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />',
+            '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></scr' + 'ipt>',
+            '<style>',
+            '  body { margin: 0; padding: 0; font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background: #525659; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }',
+            '  .print-canvas-container { position: relative; width: ' + els.canvasWrap.style.width + '; height: ' + els.canvasWrap.style.height + '; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); overflow: hidden; margin-top: 40px; margin-bottom: 40px; flex-shrink: 0; transform: none !important; }',
+            '  .print-draggable { position: absolute; transform-origin: top left; }',
+            '  .pl-table-title { background: #f0f0f0; padding: 3px 5px; font-weight: bold; font-size: 12px; border-bottom: 2px solid #333; text-align: center; color:#000; }',
+            '  .pl-table { border-collapse: collapse; font-size: 12px; border-style: hidden; width: 100%; margin: 0; color:#000; }',
+            '  .pl-table th, .pl-table td { border: 1px solid #333; padding: 2px 4px; white-space: nowrap; color:#000; text-align: center; font-weight: normal; }',
+            '  .pl-table th { background: transparent; }',
+            '  .pl-attr-table { width: 100%; margin: 0; border: none; border-collapse: collapse; font-size: 12px; color:#000; }',
+            '  .pl-attr-table th, .pl-attr-table td { border: 1px solid #333; padding: 4px 6px; white-space: nowrap; color:#000; text-align: left; font-weight: normal; }',
+            '  .pl-box { background: #fff; border: 2px solid #333; }',
+            '  .svg-draggable { cursor: default; }',
+            '  .instruction-bar { position: fixed; top: 0; left: 0; right: 0; background: rgba(40,40,40,0.95); color: white; padding: 10px; font-size: 14px; z-index: 1000; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }',
+            '  @media print {',
+            '     @page { size: ' + paperSize + ' ' + paperOrient + '; margin: 0; }',
+            '     body { background: #fff; display: block; min-height: auto; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+            '     .print-canvas-container { box-shadow: none; margin: 0 !important; page-break-after: avoid; page-break-inside: avoid; transform: none !important; }',
+            '     .instruction-bar { display: none !important; }',
+            '  }',
+            '</style>',
+            '</head>', '<body>',
+            '  <div class="instruction-bar">💡 Ctrl+P（MacはCmd+P）でこの画面のまま印刷・PDF保存できます。</div>',
+            '  <div class="print-canvas-container">',
+            cloneCanvas.innerHTML,
+            '  </div>',
+            '</body>', '</html>'
+        ].join('\n');
+        const blob = new Blob([htmlStr], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = filename + '.html';
+        a.click(); URL.revokeObjectURL(url);
+    }
+    let currentViewScale = 1;
+    function updateZoom() {
+        els.canvasWrap.style.transform = 'scale(' + currentViewScale + ')';
+        document.getElementById('zoomLevel').textContent = Math.round(currentViewScale * 100) + '%';
+        const diffHeight = els.canvasWrap.offsetHeight * (1 - currentViewScale);
+        els.canvasWrap.style.marginBottom = (40 - diffHeight) + 'px';
+    }
+    document.getElementById('btnZoomIn').addEventListener('click', () => { currentViewScale = Math.min(currentViewScale + 0.1, 3.0); updateZoom(); });
+    document.getElementById('btnZoomOut').addEventListener('click', () => { currentViewScale = Math.max(currentViewScale - 0.1, 0.2); updateZoom(); });
+    document.getElementById('btnFitView').addEventListener('click', () => {
+        const workspace = document.getElementById('workspace');
+        const availableW = workspace.clientWidth - 80; const availableH = workspace.clientHeight - 80;
+        const scaleW = availableW / els.canvasWrap.offsetWidth; const scaleH = availableH / els.canvasWrap.offsetHeight;
+        currentViewScale = Math.max(0.1, Math.min(scaleW, scaleH, 3.0)); updateZoom();
+    });
+    els.workspace.addEventListener('wheel', (e) => {
+        if (e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        currentViewScale += e.deltaY * -0.001;
+        currentViewScale = Math.max(0.1, Math.min(currentViewScale, 3.0));
+        updateZoom();
+    }, {passive: false});
+    els.btnAutoScale.addEventListener('click', () => { calcAutoScale(); renderCanvas(); document.getElementById('btnFitView').click(); });
+    els.paperSize.addEventListener('change', () => { renderCanvas(); document.getElementById('btnFitView').click(); });
+    els.paperOrient.addEventListener('change', () => { renderCanvas(); document.getElementById('btnFitView').click(); });
+    els.scale.addEventListener('change', () => { renderCanvas(); document.getElementById('btnFitView').click(); });
+    els.tableWrap.addEventListener('change', renderCanvas);
+    els.btnPrint.addEventListener('click', () => window.print());
+    els.btnExport.addEventListener('click', exportHtmlFile);
+    calcAutoScale(); renderCanvas();
+    setTimeout(() => document.getElementById('btnFitView').click(), 100);
+    window.addEventListener('resize', () => { document.getElementById('btnFitView').click(); });
+</script></body></html>

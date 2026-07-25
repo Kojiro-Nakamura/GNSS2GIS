@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<script>
+window.addEventListener('error', function(e) {
+    document.body.innerHTML += '<div style="position:fixed;top:0;left:0;background:red;color:white;z-index:9999;padding:10px;">' + e.message + ' at ' + e.filename + ':' + e.lineno + '</div>';
+});
+</script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GNSStoGIS</title>
+</head>
+<body>
+<div class="header">
+        <h1>🌍 GNSStoGIS</h1>
+    </div>
+    
+    <div class="container">
+        <!-- サイドバー領域 -->
+        <div class="sidebar">
+            <!-- ツールバー -->
+            <div class="toolbar">
+                <div class="flex-between" style="margin-bottom: 0;">
+                    <div class="flex-row gap-2">
+                        <button id="btnSaveJson" class="btn-navy btn-sm" title="現在の状態をJSONファイルとして保存">💾 保存</button>
+                        <button id="btnLoadJson" class="btn-paste btn-sm" title="保存したJSONファイルを読み込む（画面へのドラッグ＆ドロップも可能です）">📂 読込</button>
+                        <button id="btnSurvey" class="btn-green btn-sm" title="アンケートにご協力ください">📝 アンケート</button>
+                        <input type="file" id="fileInputJson" accept=".json" multiple style="display: none;">
+                    </div>
+                    <div class="flex-row gap-1">
+                        <button id="btnUndo" class="btn-sm" style="background: transparent; color: #333; border: none; font-size: 1.4rem; padding: 0 8px; box-shadow: none;" title="一つ前の状態に戻す (Ctrl+Z)" disabled>↶</button>
+                        <button id="btnRedo" class="btn-sm" style="background: transparent; color: #333; border: none; font-size: 1.4rem; padding: 0 8px; box-shadow: none;" title="取り消した操作をやり直す (Ctrl+Y)" disabled>↷</button>
+                    </div>
+                </div>
+                
+                <div class="flex-between" style="margin-bottom: 0;">
+                    <div class="flex-row gap-2">
+                        <button id="btnExport" class="btn-purple btn-sm" title="GeoJSONで保存">🌐 GeoJSON出力</button>
+                        <button id="btnExportHtml" class="btn-navy btn-sm" title="平面図HTMLを出力">📄 平面図出力</button>
+                    </div>
+                    <div class="flex-row gap-1 text-xs font-bold" style="color: var(--text-main); align-items: center; white-space: nowrap;">
+                        🏷️ 測点名表示: 
+                        <select id="labelDisplaySelect" style="padding: 0 4px; border: 1px solid var(--border-color); border-radius: 4px; height: 26px; font-size: 0.75rem;">
+                            <option value="all">すべて</option>
+                            <option value="2">2測点ごと</option>
+                            <option value="5">5測点ごと</option>
+                            <option value="10">10測点ごと</option>
+                            <option value="none">非表示</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex-between">
+                    <div class="flex-row gap-2" style="width: 100%;">
+                        <div class="mode-toggle" style="width: 100%;">
+                            <button id="modeLine" title="ポイントを順にクリックして結線、線をクリックで削除">🔗 測線</button>
+                            <button id="modeAdd" title="地図クリックでポイント追加、ドラッグで移動、右クリックで削除">📍 測点</button>
+                            <button id="modeDrawLine" title="地図上をクリックして連続線を引く、線をクリックで削除">〰️ 自由線</button>
+                            <button id="modeAddText" title="地図クリックで追加、ドラッグで移動、ダブルクリックで編集">🔤 文字</button>
+                            <button id="modeSelect" title="文字や線をクリックして移動、編集パネルで色や回転を変更">👆 選択・編集</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <!-- 属性テーブル -->
+            <div class="attr-container">
+                <div class="flex-row gap-3" style="margin-bottom: 2px;">
+                    <span class="text-sm font-bold">🏷️ 属性</span>
+                    <div class="flex-row gap-1">
+                        <button id="btnPasteAttr" class="btn-paste btn-xs" title="Excelなどから属性データを貼り付け">📋 貼付け</button>
+                        <button id="btnCopyAttr" class="btn-navy btn-xs" title="現在の属性データをクリップボードにコピー">📋 コピー</button>
+                    </div>
+                </div>
+                <div style="max-height: 120px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px; background: #fff;">
+                    <table style="margin: 0; border-style: hidden;">
+                        <thead>
+                            <tr>
+                                <th style="width: 35%;">項目名</th>
+                                <th>値</th>
+                                <th style="width: 60px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attrTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 測点表ツールバー -->
+            <div class="sub-toolbar flex-between">
+                <div class="flex-row gap-3">
+                    <span class="text-sm font-bold">📍 測量データ</span>
+                    <div class="flex-row gap-1">
+                        <button id="btnPasteSurvey" class="btn-paste btn-xs" title="Excelなどから測量データを貼り付け">📋 貼付け</button>
+                        <button id="btnCopySurvey" class="btn-navy btn-xs" title="現在の測量データをクリップボードにコピー">📋 コピー</button>
+                        <button id="btnClear" class="btn-danger btn-xs" title="すべてのデータを削除">🗑️ クリア</button>
+                        <button id="btnDemoData" class="btn-green btn-xs" title="デモデータを読み込む">📊 デモ</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 測点表 -->
+            <div class="table-container">
+                <table id="pointTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">測点名</th>
+                            <th style="width: 30%;">緯度 (Lat)</th>
+                            <th style="width: 30%;">経度 (Lon)</th>
+                            <th style="width: 15%;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 面積結果 -->
+            <div id="areaResults" style="display: none;"></div>
+        </div>
+
+        <!-- マップ領域 -->
+        <div class="map-wrapper">
+            <div id="mapContainer"></div>
+            
+            <!-- マップ上部オーバーレイボタン -->
+            <div class="map-overlay-top">
+                <div class="map-toolbar-group">
+                    <button id="btnLocation" class="text-btn" title="現在地を取得して移動">🧭 現在地</button>
+                    <button id="btnFitBounds" class="text-btn" title="すべてのポイントが画面に収まるようにズームします">🔍 全体表示</button>
+                    <button id="btnViewToggle" class="text-btn" title="背景地図を隠して図面のみ表示します">✏️ 図面ビュー</button>
+                </div>
+                </div>
+            <div id="modeInstructions" style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000;"></div>
+
+            <!-- 編集用プロパティパネル -->
+            <div id="editPanel" style="display: none; position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 2000; width: 220px; border: 1px solid #ccc;">
+                <div style="font-size: 0.85rem; font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #ddd; padding-bottom: 4px; display:flex; justify-content:space-between;">
+                    <span>プロパティ編集</span>
+                    <button id="btnDeleteSelected" class="btn-danger btn-xs" title="選択中の要素を削除">🗑️ 削除</button>
+                </div>
+                
+                <div id="editPropText" style="display: none; flex-direction: column; gap: 8px;">
+                    <label class="text-xs">文字内容: <input type="text" id="editTextInput" class="edit-panel-input"></label>
+                    <label class="text-xs">サイズ: <input type="range" id="editFontSize" class="edit-panel-range" min="10" max="100" value="16"> <span id="editFontSizeVal">16</span>px</label>
+                    <label class="text-xs flex-row gap-2">色: <input type="color" id="editTextColor" value="#000000" style="padding:0; width:40px; height:24px; border:none;"></label>
+                    <label class="text-xs">回転: <input type="range" id="editTextRotation" class="edit-panel-range" min="0" max="360" value="0"> <span id="editTextRotationVal">0</span>°</label>
+                </div>
+
+                <div id="editPropLine" style="display: none; flex-direction: column; gap: 8px;">
+                    <label class="text-xs">太さ: <input type="range" id="editLineWeight" class="edit-panel-range" min="1" max="20" value="2"> <span id="editLineWeightVal">2</span></label>
+                    <div class="flex-row gap-2">
+                        <label class="text-xs flex-row gap-1">色: <input type="color" id="editLineColor" value="#333333" style="padding:0; width:30px; height:24px; border:none;"></label>
+                        <label class="text-xs flex-row gap-1">線種: 
+                            <select id="editLineStyle" style="padding: 2px; font-size: 0.7rem; border-radius: 4px; border: 1px solid #ccc;">
+                                <option value="">実線</option>
+                                <option value="5, 5">破線</option>
+                                <option value="1, 4">点線</option>
+                                <option value="15, 5, 2, 5">一点鎖線</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label class="text-xs" title="※ドラッグすると線を回転させます">回転: <input type="range" id="editLineRotation" class="edit-panel-range" min="0" max="360" value="0"> <span id="editLineRotationVal">0</span>°</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- モーダル群 -->
+    <div id="attrPasteModal" class="modal">
+        <div class="modal-content">
+            <h3>属性データを貼り付け</h3>
+            <p class="text-sm" style="color: #4b5563; margin-bottom: 10px;">
+                Excelなどでコピーしたデータを下の枠内に貼り付けして、「反映」を押してください。<br>
+                ・<strong>「項目名」と「値」の2列</strong>をコピーした場合：全体を置き換えます。<br>
+                ・<strong>「値」の1列のみ</strong>をコピーした場合：現在の項目名に対して値を上書きします。
+            </p>
+            <textarea id="attrPasteArea" class="textarea-input" rows="6" placeholder="項目名&#9;値&#10;項目名&#9;値"></textarea>
+            <div class="flex-row gap-2" style="justify-content: flex-end; margin-top: 15px;">
+                <button id="btnCancelAttrPaste" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyAttrPaste" class="btn-paste">反映</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="surveyPasteModal" class="modal">
+        <div class="modal-content">
+            <h3>測量データを貼り付け</h3>
+            <p class="text-sm" style="color: #4b5563; margin-bottom: 10px;">
+                Excelなどでコピーしたデータを下の枠内に貼り付けして、「反映」を押してください。<br>
+                ・<strong>「測点名」「緯度」「経度」</strong>の3列（または緯度経度の2列）を想定しています。<br>
+                ・既存のデータに追加される形で読み込まれます。
+            </p>
+            <textarea id="surveyPasteArea" class="textarea-input" rows="8" placeholder="測点名&#9;緯度&#9;経度&#10;1&#9;35.123456&#9;139.123456"></textarea>
+            
+            <div style="margin-top: 10px;">
+                <label class="text-sm" style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="checkbox" id="chkPastePolygon" checked> 追加したポイントを順番に結線してポリゴンにする
+                </label>
+            </div>
+
+            <div class="flex-row gap-2" style="justify-content: flex-end; margin-top: 15px;">
+                <button id="btnCancelSurveyPaste" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplySurveyPaste" class="btn-paste">反映</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 320px; text-align: center;">
+            <h3 id="confirmTitle" style="margin-top: 0;">確認</h3>
+            <p id="confirmMessage" class="text-sm" style="color: #4b5563; margin-bottom: 20px;">本当によろしいですか？</p>
+            <div class="flex-row gap-3" style="justify-content: center;">
+                <button id="btnCancelConfirm" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyConfirm" class="btn-danger">実行する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 読込プレビューモーダル -->
+    <div id="loadPreviewModal" class="modal">
+        <div class="modal-content" style="max-width: 800px; width: 90%;">
+            <h3>データの読込</h3>
+            <p class="text-sm" style="color: #4b5563; margin-bottom: 10px;">ファイルに含まれる図形データは以下の通りです。現在の作業状態を上書きして読み込みますか？</p>
+            <div style="display: flex; gap: 15px; height: 350px;">
+                <!-- 左側：ファイルリスト -->
+                <div style="width: 250px; border: 1px solid var(--border-color); border-radius: 4px; overflow-y: auto; background: #fff;">
+                    <ul id="previewFileList" style="list-style: none; padding: 0; margin: 0;"></ul>
+                </div>
+                <!-- 右側：プレビュー -->
+                <div style="flex: 1; display: flex; flex-direction: column;">
+                    <div id="previewMapContainer" style="flex: 1; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; margin-bottom: 10px; overflow: hidden; display: flex; justify-content: center; align-items: center;"></div>
+                    <div id="previewInfo" class="text-sm" style="background: #f0fdfa; border: 1px solid #ccfbf1; padding: 10px; border-radius: 4px; color: #0f766e; line-height: 1.5; min-height: 75px; box-sizing: border-box;"></div>
+                </div>
+            </div>
+            <div class="flex-row gap-2" style="justify-content: flex-end; margin-top: 15px;">
+                <button id="btnCancelLoad" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyLoad" class="btn-paste">このデータを読み込む</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編集用データ保存モーダル -->
+    <div id="exportJsonModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>編集用データの保存</h3>
+            <p class="text-sm" style="color: #4b5563; margin-bottom: 10px;">出力するファイル名を入力してください。</p>
+            <div class="flex-row gap-1" style="margin-bottom: 15px;">
+                <input type="text" id="exportJsonFilename" class="textarea-input" style="flex:1; padding: 6px;">
+                <span>.json</span>
+            </div>
+            <div class="flex-row gap-2" style="justify-content: flex-end;">
+                <button id="btnCancelExportJson" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyExportJson" class="btn-navy">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GeoJSON保存モーダル -->
+    <div id="exportGeoJsonModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3>GeoJSONファイルの保存</h3>
+            <p class="text-sm" style="color: #4b5563; margin-bottom: 10px;">出力するファイル名を入力してください。</p>
+            <div class="flex-row gap-1" style="margin-bottom: 15px;">
+                <input type="text" id="exportGeoJsonFilename" class="textarea-input" style="flex:1; padding: 6px;">
+                <span>.geojson</span>
+            </div>
+            <div class="flex-row gap-2" style="justify-content: flex-end;">
+                <button id="btnCancelExportGeoJson" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyExportGeoJson" class="btn-navy">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- テキスト追加・編集用モーダル -->
+    <div id="addTextModal" class="modal">
+        <div class="modal-content" style="max-width: 350px;">
+            <h3>文字を追加・編集</h3>
+            <textarea id="addTextArea" class="textarea-input" rows="4" placeholder="表示する文字を入力してください"></textarea>
+            <div class="flex-row gap-2" style="justify-content: flex-end; margin-top: 15px;">
+                <button id="btnCancelAddText" style="background: #fff; color: #4b5563;">キャンセル</button>
+                <button id="btnApplyAddText" class="btn-paste">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ドラッグ＆ドロップ時のオーバーレイ -->
+    <div id="dropOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(33, 114, 112, 0.85); z-index: 9999; justify-content: center; align-items: center; color: white; font-size: 1.8rem; font-weight: bold; flex-direction: column; gap: 20px; pointer-events: none;">
+        <div style="font-size: 5rem;">📂</div>
+        <div>ファイルまたはフォルダをドロップして読み込み</div>
+        <div style="font-size: 1rem; font-weight: normal;">※ JSONファイルのみが抽出されます</div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>
