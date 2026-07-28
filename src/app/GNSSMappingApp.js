@@ -2597,7 +2597,7 @@ const htmlStr = [
                     "\n" +
                     "    class SimpleDxfWriter {",
                     "    constructor(w = 297, h = 210) {",
-                    "        this.header = [\'0\', \'SECTION\', \'2\', \'HEADER\', \'9\', \'$ACADVER\', \'1\', \'AC1015\', \'9\', \'$DWGCODEPAGE\', \'3\', \'ANSI_932\', \'9\', \'$LIMMIN\', \'10\', \'0.0\', \'20\', \'0.0\', \'9\', \'$LIMMAX\', \'10\', w.toFixed(2), \'20\', h.toFixed(2), \'9\', \'$EXTMIN\', \'10\', \'0.0\', \'20\', \'0.0\', \'9\', \'$EXTMAX\', \'10\', w.toFixed(2), \'20\', h.toFixed(2), \'0\', \'ENDSEC\'];",
+                    "        this.header = [\'0\', \'SECTION\', \'2\', \'HEADER\', \'9\', \'$ACADVER\', \'1\', \'AC1009\', \'9\', \'$DWGCODEPAGE\', \'3\', \'ANSI_932\', \'9\', \'$LIMMIN\', \'10\', \'0.0\', \'20\', \'0.0\', \'9\', \'$LIMMAX\', \'10\', w.toFixed(2), \'20\', h.toFixed(2), \'9\', \'$EXTMIN\', \'10\', \'0.0\', \'20\', \'0.0\', \'9\', \'$EXTMAX\', \'10\', w.toFixed(2), \'20\', h.toFixed(2), \'0\', \'ENDSEC\'];",
                     "        this.blocks = [\'0\', \'SECTION\', \'2\', \'BLOCKS\'];",
                     "        this.entities = [\'0\', \'SECTION\', \'2\', \'ENTITIES\'];",
                     "        this.currentSection = this.entities;",
