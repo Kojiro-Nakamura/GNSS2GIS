@@ -2782,7 +2782,7 @@ const htmlStr = [
                     "        a.click(); URL.revokeObjectURL(url);",
                     "    });",
                     "    ",
-                    "    sEnd",
+                    sEnd
                 ].join('\n');
 
 
