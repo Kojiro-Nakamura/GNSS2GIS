@@ -1095,6 +1095,10 @@ const htmlStr = [
                     "        const dxf = new SimpleDxfWriter();",
                     "        const LAT_DEG_PER_METER = 1 / 111111;",
                     "        const lonDegPerMeter = LAT_DEG_PER_METER / Math.cos(p0.lat * Math.PI / 180);",
+                    "        const exportUnit = document.getElementById('dxfExportUnit') ? document.getElementById('dxfExportUnit').value : 'paper_mm';\n" +
+                    "        const dxfScale = (exportUnit === 'mm') ? 1000 : 1;\n" +
+                    "        const targetScale = parseFloat(document.getElementById('scale').value || 1000);",
+                    "        const textScaleFactor = (exportUnit === 'paper_mm') ? 1 : ((targetScale / 1000) * 1.5 * dxfScale);\n" +
                     "        const paperSize = document.getElementById('paperSize').value;",
                     "        const paperOrient = document.getElementById('paperOrient').value;",
                     "        const paperDims = { 'A4': [210, 297], 'A3': [297, 420], 'A2': [420, 594], 'A1': [594, 841], 'A0': [841, 1189] };",
@@ -1128,10 +1132,6 @@ const htmlStr = [
                      "        }",
                     "        const cx = paperW_px / 2 - (svgW_px * scaleRatio) / 2;",
                     "        const cy = paperH_px / 2 - (svgH_px * scaleRatio) / 2;",
-                    "        const exportUnit = document.getElementById('dxfExportUnit') ? document.getElementById('dxfExportUnit').value : 'paper_mm';\n" +
-                    "        const dxfScale = (exportUnit === 'mm') ? 1000 : 1;\n" +
-                    "        const targetScale = parseFloat(document.getElementById('scale').value || 1000);",
-                    "        const textScaleFactor = (exportUnit === 'paper_mm') ? 1 : ((targetScale / 1000) * 1.5 * dxfScale);\n" +
                     "        const llToDxf = (lat, lng) => {\n" +
                     "            let px, py;\n" +
                     "            if (zoneIndex >= 1 && zoneIndex <= 19) {\n" +
