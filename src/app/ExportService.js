@@ -751,7 +751,7 @@ const htmlStr = [
                     "        for (let i = 0; i < APP_DATA.points.length; i += wrapLimit) {",
                     "            const chunk = APP_DATA.points.slice(i, i + wrapLimit);",
                     "            tableHtml += '<div class=\"pl-box\"><div class=\"pl-table-title\">成 果 表</div><table class=\"pl-table\">' +",
-                    "                '<thead><tr><th style=\"background:transparent;\">測点名</th><th style=\"background:transparent;\">緯度</th><th style=\"background:transparent;\">経度</th></tr></thead>' +",
+                    "                '<thead><tr><th style=\"background:transparent; min-width:80px; padding:3px 8px;\">測点名</th><th style=\"background:transparent; min-width:140px; padding:3px 8px;\">緯度(X)</th><th style=\"background:transparent; min-width:140px; padding:3px 8px;\">経度(Y)</th></tr></thead>' +",
                     "                '<tbody>' + chunk.map(p => '<tr><td>' + p.name + '</td><td style=\"text-align:right;\">' + p.lat.toFixed(8) + '</td><td style=\"text-align:right;\">' + p.lng.toFixed(8) + '</td></tr>').join('') + '</tbody></table></div>';",
                     "        }",
                     "        tableHtml += '</div>';",
