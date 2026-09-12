@@ -481,7 +481,7 @@ const htmlStr = [
                     "            <option value='0'>相対座標 (図面の左下を 0,0 とする)</option>",
                     "            <option value='auto' id='optAutoZone'>平面直角座標 (自動選択)</option>",
                     "        </select>",
-        "        <select id='dxfExportUnit' style='padding:4px; font-size:12px; margin-right:5px; border-radius:4px;'><option value='mm'>出力単位：ミリメートル(CAD用)</option><option value='m'>出力単位：メートル(GIS用)</option></select><button id='btnExportDxf' style='background: #c2410c;'>💾 DXF保存</button>",
+        "        <select id='dxfExportUnit' style='padding:4px; font-size:12px; margin-right:5px; border-radius:4px;'><option value='paper_mm' selected>図面サイズ(ミリメートル) - 推奨</option><option value='mm'>実寸座標(ミリメートル) - CAD用</option><option value='m'>実寸座標(メートル) - GIS用</option></select><button id='btnExportDxf' style='background: #c2410c;'>💾 DXF保存</button>",
                     "        <button id='btnExportHtml' class='btn-purple'>📄 HTML保存</button>",
                     "        <div style='flex: 1;'></div>",
                     "        <button id='btnClosePrint' style='background: #666; margin-left: 10px;'>✖ 閉じる</button>",
@@ -1095,22 +1095,62 @@ const htmlStr = [
                     "        const dxf = new SimpleDxfWriter();",
                     "        const LAT_DEG_PER_METER = 1 / 111111;",
                     "        const lonDegPerMeter = LAT_DEG_PER_METER / Math.cos(p0.lat * Math.PI / 180);",
-                    "        const llToDxf = (lat, lng) => {",
-                    "            let px, py;",
-                    "            if (zoneIndex >= 1 && zoneIndex <= 19) {",
-                    "                const projDef = JGD2011_ZONES[zoneIndex];",
-                    "                const coords = proj4(projDef, [lng, lat]);",
-                    "                px = coords[0]; py = coords[1];",
-                    "            } else {",
-                    "                px = (lng - p0.lng) / lonDegPerMeter;",
-                    "                py = (lat - p0.lat) / LAT_DEG_PER_METER;",
-                    "            }",
-                    "            return { x: px * dxfScale, y: py * dxfScale };",
+                    "        const paperSize = document.getElementById('paperSize').value;",
+                    "        const paperOrient = document.getElementById('paperOrient').value;",
+                    "        const paperDims = { 'A4': [210, 297], 'A3': [297, 420], 'A2': [420, 594], 'A1': [594, 841], 'A0': [841, 1189] };",
+                    "        let [paperW_mm, paperH_mm] = paperDims[paperSize] || [210, 297];",
+                    "        if (paperOrient === 'landscape') { const tmp = paperW_mm; paperW_mm = paperH_mm; paperH_mm = tmp; }",
+                    "        const paperW_px = paperW_mm * 3.7795;",
+                    "        const paperH_px = paperH_mm * 3.7795;",
+                    "        ",
+                    "        let minXHtml = Infinity, maxXHtml = -Infinity, minYHtml = Infinity, maxYHtml = -Infinity;",
+                    "        const updateBoundsHtml = (lat, lng) => {",
+                    "            const x = (lng - p0.lng) / lonDegPerMeter;",
+                    "            const y = -(lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;",
+                    "            if (x < minXHtml) minXHtml = x; if (x > maxXHtml) maxXHtml = x;",
+                    "            if (y < minYHtml) minYHtml = y; if (y > maxYHtml) maxYHtml = y;",
                     "        };",
-                    "const exportUnit = document.getElementById('dxfExportUnit') ? document.getElementById('dxfExportUnit').value : 'mm';",
-                    "        const dxfScale = (exportUnit === 'mm') ? 1000 : 1;",
+                    "        if (APP_DATA.points) APP_DATA.points.forEach(p => updateBoundsHtml(p.lat, p.lng));",
+                    "        if (APP_DATA.customLines) APP_DATA.customLines.forEach(l => l.latlngs.forEach(c => updateBoundsHtml(c[0] !== undefined ? c[0] : c.lat, c[1] !== undefined ? c[1] : c.lng)));",
+                    "        if (APP_DATA.areas) APP_DATA.areas.forEach(a => a.coords.forEach(c => updateBoundsHtml(c[0], c[1])));",
+                    "        if (minXHtml === Infinity) { minXHtml = 0; maxXHtml = 10; minYHtml = 0; maxYHtml = 10; }",
+                    "        const wHtml = maxXHtml - minXHtml || 10;",
+                    "        const hHtml = maxYHtml - minYHtml || 10;",
+                    "        const padHtml = Math.max(wHtml, hHtml) * 0.05;",
+                    "        ",
+                    "        const pxPerMeter = (1000 / targetScale) * 3.7795;",
+                    "        const svgW_px = (wHtml + padHtml*2) * pxPerMeter;",
+                    "        const svgH_px = (hHtml + padHtml*2) * pxPerMeter;",
+                    "        ",
+                    "        let scaleRatio = 1;",
+                     "        if (svgW_px > paperW_px || svgH_px > paperH_px) {",
+                     "            scaleRatio = Math.min(paperW_px / svgW_px, paperH_px / svgH_px);",
+                     "        }",
+                    "        const cx = paperW_px / 2 - (svgW_px * scaleRatio) / 2;",
+                    "        const cy = paperH_px / 2 - (svgH_px * scaleRatio) / 2;",
+                    "        const exportUnit = document.getElementById('dxfExportUnit') ? document.getElementById('dxfExportUnit').value : 'paper_mm';\n" +
+                    "        const dxfScale = (exportUnit === 'mm') ? 1000 : 1;\n" +
                     "        const targetScale = parseFloat(document.getElementById('scale').value || 1000);",
-                    "        const textScaleFactor = (targetScale / 1000) * 1.5 * dxfScale;",
+                    "        const textScaleFactor = (exportUnit === 'paper_mm') ? 1 : ((targetScale / 1000) * 1.5 * dxfScale);\n" +
+                    "        const llToDxf = (lat, lng) => {\n" +
+                    "            let px, py;\n" +
+                    "            if (zoneIndex >= 1 && zoneIndex <= 19) {\n" +
+                    "                const projDef = JGD2011_ZONES[zoneIndex];\n" +
+                    "                const coords = proj4(projDef, [lng, lat]);\n" +
+                    "                px = coords[0]; py = coords[1];\n" +
+                    "            } else {\n" +
+                    "                px = (lng - p0.lng) / lonDegPerMeter;\n" +
+                    "                py = (lat - p0.lat) / LAT_DEG_PER_METER;\n" +
+                    "            }\n" +
+                    "            if (exportUnit === 'paper_mm') {\n" +
+                    "                const cssPxX = (px - (minXHtml - padHtml)) * pxPerMeter;\n" +
+                    "                const cssPxY = (-py - (minYHtml - padHtml)) * pxPerMeter;\n" +
+                    "                const paper_x = cx + cssPxX * scaleRatio;\n" +
+                    "                const paper_y = cy + cssPxY * scaleRatio;\n" +
+                    "                return { x: paper_x / 3.7795, y: (paperH_px - paper_y) / 3.7795 };\n" +
+                    "            }\n" +
+                    "            return { x: px * dxfScale, y: py * dxfScale };\n" +
+                    "        };\n" +
 
                     "        if (APP_DATA.areas) { APP_DATA.areas.forEach((area, i) => {",
                     "            const pts = area.coords.map(c => llToDxf(c[0], c[1]));",
@@ -1178,49 +1218,19 @@ const htmlStr = [
                     "            dxf.addText(t.text, dp.x, dp.y, th, 7, 'L', angle);",
                     "        }); }",
                     "",
-                    "        const paperSize = document.getElementById('paperSize').value;",
-                    "        const paperOrient = document.getElementById('paperOrient').value;",
-                    "        const paperDims = { 'A4': [210, 297], 'A3': [297, 420], 'A2': [420, 594], 'A1': [594, 841], 'A0': [841, 1189] };",
-                    "        let [paperW_mm, paperH_mm] = paperDims[paperSize] || [210, 297];",
-                    "        if (paperOrient === 'landscape') { const tmp = paperW_mm; paperW_mm = paperH_mm; paperH_mm = tmp; }",
-                    "        const paperW_px = paperW_mm * 3.7795;",
-                    "        const paperH_px = paperH_mm * 3.7795;",
                     "        ",
-                    "        let minXHtml = Infinity, maxXHtml = -Infinity, minYHtml = Infinity, maxYHtml = -Infinity;",
-                    "        const updateBoundsHtml = (lat, lng) => {",
-                    "            const x = (lng - p0.lng) / lonDegPerMeter;",
-                    "            const y = -(lat - p0.lat) / GeoUtils.LAT_DEG_PER_METER;",
-                    "            if (x < minXHtml) minXHtml = x; if (x > maxXHtml) maxXHtml = x;",
-                    "            if (y < minYHtml) minYHtml = y; if (y > maxYHtml) maxYHtml = y;",
-                    "        };",
-                    "        if (APP_DATA.points) APP_DATA.points.forEach(p => updateBoundsHtml(p.lat, p.lng));",
-                    "        if (APP_DATA.customLines) APP_DATA.customLines.forEach(l => l.latlngs.forEach(c => updateBoundsHtml(c[0] !== undefined ? c[0] : c.lat, c[1] !== undefined ? c[1] : c.lng)));",
-                    "        if (APP_DATA.areas) APP_DATA.areas.forEach(a => a.coords.forEach(c => updateBoundsHtml(c[0], c[1])));",
-                    "        if (minXHtml === Infinity) { minXHtml = 0; maxXHtml = 10; minYHtml = 0; maxYHtml = 10; }",
-                    "        const wHtml = maxXHtml - minXHtml || 10;",
-                    "        const hHtml = maxYHtml - minYHtml || 10;",
-                    "        const padHtml = Math.max(wHtml, hHtml) * 0.05;",
-                    "        ",
-                    "        const pxPerMeter = (1000 / targetScale) * 3.7795;",
-                    "        const svgW_px = (wHtml + padHtml*2) * pxPerMeter;",
-                    "        const svgH_px = (hHtml + padHtml*2) * pxPerMeter;",
-                    "        ",
-                    "        let scaleRatio = 1;",
-//                     "        if (svgW_px > paperW_px || svgH_px > paperH_px) {",
-//                     "            scaleRatio = Math.min(paperW_px / svgW_px, paperH_px / svgH_px);",
-//                     "        }",
-                    "        const cx = paperW_px / 2 - (svgW_px * scaleRatio) / 2;",
-                    "        const cy = paperH_px / 2 - (svgH_px * scaleRatio) / 2;",
-                    "        ",
-                    "        const pxToDxfMap = (px, py) => {",
-                    "            const svgPx = (px - cx) / scaleRatio;",
-                    "            const svgPy = (py - cy) / scaleRatio;",
-                    "            const vx = minXHtml - padHtml + svgPx / pxPerMeter;",
-                    "            const vy = minYHtml - padHtml + svgPy / pxPerMeter;",
-                    "            const lat = p0.lat - vy * GeoUtils.LAT_DEG_PER_METER;",
-                    "            const lng = p0.lng + vx * lonDegPerMeter;",
-                    "            return llToDxf(lat, lng);",
-                    "        };",
+                    "        const pxToDxfMap = (px, py) => {\n" +
+                    "            if (exportUnit === 'paper_mm') {\n" +
+                    "                return { x: px / 3.7795, y: (paperH_px - py) / 3.7795 };\n" +
+                    "            }\n" +
+                    "            const svgPx = (px - cx) / scaleRatio;\n" +
+                    "            const svgPy = (py - cy) / scaleRatio;\n" +
+                    "            const vx = minXHtml - padHtml + svgPx / pxPerMeter;\n" +
+                    "            const vy = minYHtml - padHtml + svgPy / pxPerMeter;\n" +
+                    "            const lat = p0.lat - vy * GeoUtils.LAT_DEG_PER_METER;\n" +
+                    "            const lng = p0.lng + vx * lonDegPerMeter;\n" +
+                    "            return llToDxf(lat, lng);\n" +
+                    "        };\n" +
                     "",
                     "        const canvasWrapEl = document.getElementById('canvasWrap');",
                     "        if (canvasWrapEl) {",
@@ -1258,7 +1268,7 @@ const htmlStr = [
                     "                    if (text) {",
                     "                        const compStyle = window.getComputedStyle(el);",
                     "                        const fontSizePx = parseFloat(compStyle.fontSize);",
-                    "                        const fontSizeMeters = (fontSizePx / scaleRatio) / pxPerMeter;",
+                    "                        const fontSizeMeters = (exportUnit === 'paper_mm') ? (fontSizePx / 3.7795) : ((fontSizePx / scaleRatio) / pxPerMeter * dxfScale);\n" +
                     "                        const textPxY = pxTop + (rect.height / 2); ",
                     "                        const textPxX = pxLeft + (rect.width / 2);",
                     "                        const tp = pxToDxfMap(textPxX, textPxY);",
@@ -1299,7 +1309,7 @@ const htmlStr = [
                     "                dxf.addLine(p2.x, p2.y, pMidBottom.x, pMidBottom.y, 7);",
                     "                ",
                     "                const textTp = pxToDxfMap((pxLeft + pxRight)/2, pxTop + 12);",
-                    "                const fontSizeMeters = (18 / scaleRatio) / pxPerMeter;",
+                    "                const fontSizeMeters = (exportUnit === 'paper_mm') ? (18 / 3.7795) : ((18 / scaleRatio) / pxPerMeter * dxfScale);\n" +
                     "                dxf.addText('N', textTp.x - fontSizeMeters*0.3, textTp.y, fontSizeMeters, 7);",
                     "            }",
                     "            ",
