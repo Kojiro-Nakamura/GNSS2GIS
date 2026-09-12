@@ -1055,7 +1055,7 @@ const htmlStr = [
                     "        }",
                     "        addCircle(x, y, radius, color=256) {",
                     "            this.currentSection.push('0', 'CIRCLE', '8', '0', '62', color, '10', x.toFixed(4), '20', y.toFixed(4), '30', '0.0', '40', radius.toFixed(4));",
-                    "        },",
+                    "        }",
                     "        toString() {",
                     "            this.blocks.push('0', 'ENDSEC');",
                     "            this.entities.push('0', 'ENDSEC');",
