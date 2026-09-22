@@ -1,3 +1,7 @@
+import leafletCss from 'leaflet/dist/leaflet.css?raw';
+import leafletJs from 'leaflet/dist/leaflet.js?raw';
+import encodingJs from 'encoding-japanese/encoding.min.js?raw';
+import proj4Js from 'proj4/dist/proj4.js?raw';
 import { GeoUtils } from '../utils/GeoUtils.js';
 import { APP_CONFIG } from '../config/constants.js';
 
@@ -390,10 +394,10 @@ const htmlStr = [
                     "<head>",
                     "<meta charset='UTF-8'>",
                     "<title>平面図レイアウト調整 - " + filename + "</title>",
-                    "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css' />",
-                    "<script src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'></scr" + "ipt>",
-                    "<script src='https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.0.0/encoding.min.js'></scr" + "ipt>",
-                    "<script src='https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js'></scr" + "ipt>",
+                    "<style>" + leafletCss + "</style>",
+                    "<script>" + leafletJs + "</scr" + "ipt>",
+                    "<script>" + encodingJs + "</scr" + "ipt>",
+                    "<script>" + proj4Js + "</scr" + "ipt>",
                     "<style>\n  .leaflet-container { background: #fff !important; }",
                     "  body { margin: 0; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif; background: #525659; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }",
                     "  .print-toolbar { background: #282828; color: white; padding: 10px 15px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 100; flex-shrink: 0; }",
@@ -911,8 +915,8 @@ const htmlStr = [
                     "        const sStart = '<scr' + 'ipt>'; const sEnd = '</scr' + 'ipt>';",
                     "        const htmlStr = [",
                     "            '<!DOCTYPE html>', '<html lang=\"ja\">', '<head>', '<meta charset=\"UTF-8\">', '<title>' + filename + '</title>',",
-                    "            '<link rel=\"stylesheet\" href=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.css\" />',",
-                    "            '<script src=\"https://unpkg.com/leaflet@1.9.4/dist/leaflet.js\"></scr' + 'ipt>',",
+                    "            '<style>' + leafletCss + '</style>',",
+                    "            '<script>' + leafletJs + '</scr' + 'ipt>',",
                     "            '<style>',",
                     "            '  body { margin: 0; padding: 0; font-family: \"Segoe UI\", Tahoma, Geneva, Verdana, sans-serif; background: #525659; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }',",
                     "            '  .print-canvas-container { position: relative; width: ' + els.canvasWrap.style.width + '; height: ' + els.canvasWrap.style.height + '; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.5); overflow: hidden; margin-top: 40px; margin-bottom: 40px; flex-shrink: 0; transform: none !important; }',",
