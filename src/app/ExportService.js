@@ -390,9 +390,10 @@ export class ExportService {
 
 const htmlStr = [
                     "<!DOCTYPE html>",
-                    "<html lang='ja'>",
+                    "<html lang='ja' translate='no'>",
                     "<head>",
                     "<meta charset='UTF-8'>",
+                    "<meta name='google' content='notranslate'>",
                     "<title>平面図レイアウト調整 - " + filename + "</title>",
                     "<style>" + leafletCss + "</style>",
                     "<script>" + leafletJs + "</scr" + "ipt>",
@@ -914,7 +915,7 @@ const htmlStr = [
                     "        cloneCanvas.querySelectorAll('.print-draggable').forEach(el => el.classList.remove('print-hover-outline'));",
                     "        const sStart = '<scr' + 'ipt>'; const sEnd = '</scr' + 'ipt>';",
                     "        const htmlStr = [",
-                    "            '<!DOCTYPE html>', '<html lang=\"ja\">', '<head>', '<meta charset=\"UTF-8\">', '<title>' + filename + '</title>',",
+                    "            '<!DOCTYPE html>', '<html lang=\"ja\" translate=\"no\">', '<head>', '<meta charset=\"UTF-8\">', '<meta name=\"google\" content=\"notranslate\">', '<title>' + filename + '</title>',",
                     "            '<style>' + leafletCss + '</style>',",
                     "            '<script>' + leafletJs + '</scr' + 'ipt>',",
                     "            '<style>',",
